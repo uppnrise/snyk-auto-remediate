@@ -122,7 +122,7 @@ src/
 
 ## Security
 
-- Tokens are **never logged** — the logger automatically masks `****** `token TOKEN`, `ghp_*`, and `snyk_*` patterns.
+- Tokens are **never logged** — the logger automatically masks `Bearer`, `token TOKEN`, `ghp_*`, and `snyk_*` patterns.
 - All API calls use HTTPS.
 - Retry-with-exponential-backoff on Snyk API 429/5xx responses.
 

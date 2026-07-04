@@ -33,6 +33,12 @@ on:
     # Every Monday at 03:00 UTC
     - cron: '0 3 * * 1'
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  security-events: write
+
 jobs:
   snyk-remediate:
     name: Snyk Auto-Remediation
