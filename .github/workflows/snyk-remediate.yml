@@ -1,0 +1,64 @@
+name: Snyk Auto-Remediation
+
+on:
+  workflow_dispatch:
+    inputs:
+      target-branches:
+        description: 'Comma-separated target branches to remediate'
+        type: string
+        default: 'main'
+      severity-threshold:
+        description: 'Minimum severity (critical|high|medium|low)'
+        type: choice
+        options: [critical, high, medium, low]
+        default: high
+      dry-run:
+        description: 'Dry run — no changes committed or PRs opened'
+        type: boolean
+        default: false
+      max-prs-per-run:
+        description: 'Maximum number of PRs to open'
+        type: string
+        default: '5'
+      max-issues-per-run:
+        description: 'Maximum number of GitHub Issues to create'
+        type: string
+        default: '10'
+      enable-copilot-agent-fallback:
+        description: 'Create Issues for unfixable findings assigned to @copilot'
+        type: boolean
+        default: true
+
+  schedule:
+    # Every Monday at 03:00 UTC
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  security-events: write
+
+jobs:
+  snyk-remediate:
+    name: Snyk Auto-Remediation
+    uses: ./.github/workflows/snyk-remediate.reusable.yml
+    with:
+      target-branches: ${{ github.event.inputs['target-branches'] || 'main' }}
+      severity-threshold: ${{ github.event.inputs['severity-threshold'] || 'high' }}
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['dry-run'] == 'true' }}
+      max-prs-per-run: ${{ fromJSON(github.event.inputs['max-prs-per-run'] || '5') }}
+      max-issues-per-run: ${{ fromJSON(github.event.inputs['max-issues-per-run'] || '10') }}
+      enable-copilot-agent-fallback: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs['enable-copilot-agent-fallback'] == 'true' }}
+      pr-labels: 'security,dependencies,snyk,automated'
+      issue-labels: 'security,snyk,ai-remediation'
+      node-version: '20'
+      python-version: '3.12'
+      java-version: '21'
+      go-version: '1.22'
+      run-tests: true
+      fail-on-no-fix: false
+      copilot-assignee: 'copilot'
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      GH_PAT: ${{ secrets.GH_PAT }}

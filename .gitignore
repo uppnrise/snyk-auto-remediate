@@ -1,0 +1,17 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts
+coverage/
+.nyc_output/
+*.log
+.env
+.env.*
+!.env.example
+snyk-remediation-report.json
+snyk-remediation-report.sarif
+*.sarif
+tmp/
+.tmp/
+scripts/remediate/node_modules/
+scripts/remediate/dist/
