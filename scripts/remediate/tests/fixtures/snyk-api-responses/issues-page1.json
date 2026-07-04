@@ -1,0 +1,106 @@
+{
+  "data": [
+    {
+      "id": "SNYK-JS-LODASH-590103",
+      "type": "issue",
+      "attributes": {
+        "key": "SNYK-JS-LODASH-590103",
+        "title": "Prototype Pollution",
+        "type": "package_vulnerability",
+        "created_at": "2019-07-10T00:00:00.000Z",
+        "updated_at": "2021-04-09T00:00:00.000Z",
+        "description": "lodash versions prior to 4.17.21 are vulnerable to prototype pollution.",
+        "severity": "high",
+        "effective_severity_level": "high",
+        "status": "open",
+        "ignored": false,
+        "problems": [
+          {
+            "id": "CVE-2021-23337",
+            "source": "NVD",
+            "url": "https://security.snyk.io/vuln/SNYK-JS-LODASH-590103",
+            "type": "vulnerability",
+            "cve": "CVE-2021-23337",
+            "cvss_score": 7.2,
+            "cvss_vector": "CVSS:3.1/AV:N/AC:L/PR:H/UI:N/S:U/C:H/I:H/A:H"
+          }
+        ],
+        "coordinates": [
+          {
+            "remedies": [
+              {
+                "description": "Upgrade lodash to version 4.17.21 or higher",
+                "type": "indeterminate",
+                "details": {
+                  "upgrade_package": "lodash",
+                  "target_version": "4.17.21"
+                }
+              }
+            ],
+            "representations": [
+              {
+                "dependency": {
+                  "package_name": "lodash",
+                  "package_version": "4.17.15"
+                }
+              }
+            ],
+            "is_fixable_snyk": true,
+            "is_fixable_upstream": true,
+            "is_patchable": false,
+            "is_pinnable": false
+          }
+        ]
+      }
+    },
+    {
+      "id": "SNYK-JS-AXIOS-1038009",
+      "type": "issue",
+      "attributes": {
+        "key": "SNYK-JS-AXIOS-1038009",
+        "title": "Server-Side Request Forgery (SSRF)",
+        "type": "package_vulnerability",
+        "created_at": "2020-11-06T00:00:00.000Z",
+        "updated_at": "2022-01-01T00:00:00.000Z",
+        "description": "axios versions below 0.21.2 are vulnerable to SSRF.",
+        "severity": "high",
+        "effective_severity_level": "high",
+        "status": "open",
+        "ignored": false,
+        "problems": [
+          {
+            "id": "CVE-2020-28168",
+            "source": "NVD",
+            "url": "https://security.snyk.io/vuln/SNYK-JS-AXIOS-1038009",
+            "type": "vulnerability",
+            "cve": "CVE-2020-28168",
+            "cvss_score": 5.9
+          }
+        ],
+        "coordinates": [
+          {
+            "remedies": [],
+            "representations": [
+              {
+                "dependency": {
+                  "package_name": "axios",
+                  "package_version": "0.21.1"
+                }
+              }
+            ],
+            "is_fixable_snyk": false,
+            "is_fixable_upstream": false,
+            "is_patchable": false,
+            "is_pinnable": false
+          }
+        ]
+      }
+    }
+  ],
+  "links": {
+    "self": "/rest/orgs/test-org-id/issues?version=2024-10-15&limit=100&status=open"
+  },
+  "meta": {
+    "count": 2
+  }
+}

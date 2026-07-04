@@ -1,0 +1,247 @@
+name: Snyk Auto-Remediation (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      target-branches:
+        description: 'Comma-separated target branches to remediate'
+        type: string
+        default: 'main'
+      severity-threshold:
+        description: 'Minimum severity to remediate (critical|high|medium|low)'
+        type: string
+        default: 'high'
+      package-managers:
+        description: 'Comma-separated package managers (leave empty for auto-detect)'
+        type: string
+        default: ''
+      dry-run:
+        description: 'Dry run — no changes committed or PRs opened'
+        type: boolean
+        default: false
+      max-prs-per-run:
+        description: 'Maximum number of PRs to open per run'
+        type: number
+        default: 5
+      max-issues-per-run:
+        description: 'Maximum number of GitHub Issues to create per run'
+        type: number
+        default: 10
+      pr-labels:
+        description: 'Comma-separated labels to apply to PRs'
+        type: string
+        default: 'security,dependencies,snyk,automated'
+      issue-labels:
+        description: 'Comma-separated labels to apply to Issues'
+        type: string
+        default: 'security,snyk,ai-remediation'
+      pr-reviewers:
+        description: 'Comma-separated GitHub usernames to request as PR reviewers'
+        type: string
+        default: ''
+      pr-team-reviewers:
+        description: 'Comma-separated GitHub team slugs to request as PR reviewers'
+        type: string
+        default: ''
+      snyk-org-id:
+        description: 'Snyk organization ID (overrides SNYK_ORG_ID secret)'
+        type: string
+        default: ''
+      snyk-project-ids:
+        description: 'Comma-separated Snyk project IDs to scope remediation'
+        type: string
+        default: ''
+      working-directory:
+        description: 'Working directory relative to repository root'
+        type: string
+        default: '.'
+      node-version:
+        description: 'Node.js version for the remediation engine'
+        type: string
+        default: '20'
+      python-version:
+        description: 'Python version to install (for Python projects)'
+        type: string
+        default: '3.12'
+      java-version:
+        description: 'Java version to install (for Java projects)'
+        type: string
+        default: '21'
+      go-version:
+        description: 'Go version to install (for Go projects)'
+        type: string
+        default: '1.22'
+      run-tests:
+        description: 'Run tests after applying fixes'
+        type: boolean
+        default: true
+      test-command:
+        description: 'Custom test command (overrides auto-detection)'
+        type: string
+        default: ''
+      fail-on-no-fix:
+        description: 'Exit with code 2 if no fixes were applied'
+        type: boolean
+        default: false
+      enable-copilot-agent-fallback:
+        description: 'Create GitHub Issues for unfixable findings, assigned to @copilot'
+        type: boolean
+        default: true
+      copilot-assignee:
+        description: 'GitHub username to assign unfixable finding issues to'
+        type: string
+        default: 'copilot'
+    secrets:
+      SNYK_TOKEN:
+        required: true
+      GH_PAT:
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  security-events: write
+
+jobs:
+  remediate:
+    name: Snyk Remediation (${{ matrix.branch }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        branch: ${{ fromJson(format('["{0}"]', replace(replace(inputs['target-branches'], ' ', ''), ',', '","'))) }}
+      fail-fast: false
+
+    steps:
+      - name: Checkout ${{ matrix.branch }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.branch }}
+          token: ${{ secrets.GH_PAT || github.token }}
+          fetch-depth: 0
+
+      # ── Toolchain: Node.js (always needed for the engine) ──────────────────
+      - name: Set up Node.js ${{ inputs['node-version'] }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs['node-version'] }}
+
+      # ── Toolchain: Python (conditional) ────────────────────────────────────
+      - name: Detect Python project
+        id: detect-python
+        working-directory: ${{ inputs['working-directory'] }}
+        run: |
+          if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "poetry.lock" ]; then
+            echo "python_needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "python_needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Python ${{ inputs['python-version'] }}
+        if: steps.detect-python.outputs.python_needed == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ inputs['python-version'] }}
+
+      # ── Toolchain: Java (conditional) ──────────────────────────────────────
+      - name: Detect Java project
+        id: detect-java
+        working-directory: ${{ inputs['working-directory'] }}
+        run: |
+          if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            echo "java_needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "java_needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Java ${{ inputs['java-version'] }}
+        if: steps.detect-java.outputs.java_needed == 'true'
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ inputs['java-version'] }}
+          distribution: temurin
+
+      # ── Toolchain: Go (conditional) ────────────────────────────────────────
+      - name: Detect Go project
+        id: detect-go
+        working-directory: ${{ inputs['working-directory'] }}
+        run: |
+          if [ -f "go.mod" ]; then
+            echo "go_needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go_needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Go ${{ inputs['go-version'] }}
+        if: steps.detect-go.outputs.go_needed == 'true'
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ inputs['go-version'] }}
+
+      # ── Snyk CLI ────────────────────────────────────────────────────────────
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate Snyk
+        run: snyk auth "$SNYK_TOKEN"
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+      # ── Remediation engine dependencies ────────────────────────────────────
+      - name: Install remediation engine dependencies
+        working-directory: ${{ github.workspace }}/scripts/remediate
+        run: npm ci
+
+      # ── Configure Git ───────────────────────────────────────────────────────
+      - name: Configure Git
+        run: |
+          git config --global user.name "snyk-auto-remediate[bot]"
+          git config --global user.email "snyk-auto-remediate@users.noreply.github.com"
+
+      # ── Run remediation engine ──────────────────────────────────────────────
+      - name: Run Snyk Auto-Remediation Engine
+        id: remediate
+        working-directory: ${{ inputs['working-directory'] }}
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          SNYK_ORG_ID: ${{ inputs['snyk-org-id'] || vars.SNYK_ORG_ID || '' }}
+          SNYK_PROJECT_IDS: ${{ inputs['snyk-project-ids'] }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          SEVERITY_THRESHOLD: ${{ inputs['severity-threshold'] }}
+          PACKAGE_MANAGERS: ${{ inputs['package-managers'] }}
+          DRY_RUN: ${{ inputs['dry-run'] }}
+          MAX_PRS_PER_RUN: ${{ inputs['max-prs-per-run'] }}
+          MAX_ISSUES_PER_RUN: ${{ inputs['max-issues-per-run'] }}
+          PR_LABELS: ${{ inputs['pr-labels'] }}
+          ISSUE_LABELS: ${{ inputs['issue-labels'] }}
+          PR_REVIEWERS: ${{ inputs['pr-reviewers'] }}
+          PR_TEAM_REVIEWERS: ${{ inputs['pr-team-reviewers'] }}
+          WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+          ENABLE_COPILOT_AGENT_FALLBACK: ${{ inputs['enable-copilot-agent-fallback'] }}
+          COPILOT_ASSIGNEE: ${{ inputs['copilot-assignee'] }}
+          FAIL_ON_NO_FIX: ${{ inputs['fail-on-no-fix'] }}
+          RUN_TESTS: ${{ inputs['run-tests'] }}
+          TEST_COMMAND: ${{ inputs['test-command'] }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+        run: npx tsx ${{ github.workspace }}/scripts/remediate/src/index.ts
+
+      # ── Upload SARIF to GitHub Security ────────────────────────────────────
+      - name: Upload SARIF report
+        if: always() && hashFiles('**/snyk-remediation-report.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: snyk-remediation-report.sarif
+          category: snyk-auto-remediation
+
+      # ── Upload JSON + SARIF artifacts ──────────────────────────────────────
+      - name: Upload remediation artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-remediation-report-${{ matrix.branch }}-${{ github.run_id }}
+          path: |
+            **/snyk-remediation-report.json
+            **/snyk-remediation-report.sarif
+          if-no-files-found: ignore
+          retention-days: 30
