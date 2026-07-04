@@ -1,7 +1,7 @@
 import { loadConfig } from './utils/config.js';
 import { logger } from './utils/logger.js';
 import { fetchSnykIssues } from './snyk/api-client.js';
-import { deduplicateIssues, partitionByFixability } from './utils/dedup.js';
+import { deduplicateIssues, partitionByFixability, filterIssuesForPackageManager } from './utils/dedup.js';
 import { detectEcosystems } from './detectors/language-detector.js';
 import { NpmFixer } from './fixers/npm-fixer.js';
 import { YarnFixer } from './fixers/yarn-fixer.js';
@@ -18,6 +18,7 @@ import { writeJsonReport } from './reporting/json-writer.js';
 import { writeSarifReport } from './reporting/sarif-writer.js';
 import { writeStepSummary } from './reporting/summary-writer.js';
 import { gitHasChanges, gitAddAll, gitCommit, gitCheckoutBranch, buildRemediationBranchName, gitConfigureUser, gitBranchExists, gitPush } from './utils/git.js';
+import { runPostFixTests } from './utils/test-runner.js';
 import type { FixResult, RemediationReport } from './snyk/types.js';
 import { resolve } from 'path';
 
@@ -82,7 +83,14 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const relevantIssues = fixable.slice(0, config.maxPrsPerRun * 10); // rough limit
+      const relevantIssues = filterIssuesForPackageManager(fixable, ecosystem.packageManager).slice(
+        0,
+        config.maxPrsPerRun * 10,
+      );
+      if (relevantIssues.length === 0) {
+        logger.info(`No ${ecosystem.packageManager} issues to fix, skipping`);
+        continue;
+      }
       logger.info(`Running ${ecosystem.packageManager} fixer on ${relevantIssues.length} issues...`);
 
       const result = await fixer.applyFix(workingDir, relevantIssues, config.dryRun);
@@ -103,29 +111,42 @@ async function main(): Promise<void> {
     // Push and create PR only when there are actual commits to push
     const hasFixes = fixResults.some((r) => r.success && r.fixedFindings.length > 0);
     if (!config.dryRun && hasFixes) {
-      try {
-        await gitPush(workingDir, branchName);
+      // Run tests after fixes have been applied, before pushing / opening PR.
+      if (config.runTests) {
+        const testResult = await runPostFixTests(workingDir, ecosystems, config.testCommand);
+        if (testResult.ran && !testResult.passed) {
+          const msg = `Post-fix tests failed; aborting PR creation: ${testResult.error ?? 'unknown error'}`;
+          logger.error(msg);
+          errors.push(msg);
+        }
+      }
 
-        const allFixedIds = fixResults.flatMap((r) => r.fixedFindings.map((f) => f.id));
-        const allChanges = fixResults.flatMap((r) => r.changesApplied);
+      const testsBlockedPush = errors.some((e) => e.startsWith('Post-fix tests failed'));
+      if (!testsBlockedPush) {
+        try {
+          await gitPush(workingDir, branchName);
 
-        const prDetails: import('./github/pr-creator.js').PrDetails = {
-          title: `fix(security): Snyk auto-remediation for ${config.targetBranch}`,
-          body: buildPrBody(allChanges, allFixedIds, config.targetBranch, config),
-          head: branchName,
-          base: config.targetBranch,
-          labels: config.prLabels,
-        };
-        if (config.prReviewers) prDetails.reviewers = config.prReviewers;
-        if (config.prTeamReviewers) prDetails.teamReviewers = config.prTeamReviewers;
+          const allFixedIds = fixResults.flatMap((r) => r.fixedFindings.map((f) => f.id));
+          const allChanges = fixResults.flatMap((r) => r.changesApplied);
 
-        const pr = await createOrUpdatePr(prDetails, config);
+          const prDetails: import('./github/pr-creator.js').PrDetails = {
+            title: `fix(security): Snyk auto-remediation for ${config.targetBranch}`,
+            body: buildPrBody(allChanges, allFixedIds, config.targetBranch),
+            head: branchName,
+            base: config.targetBranch,
+            labels: config.prLabels,
+          };
+          if (config.prReviewers) prDetails.reviewers = config.prReviewers;
+          if (config.prTeamReviewers) prDetails.teamReviewers = config.prTeamReviewers;
 
-        if (pr) prsCreated++;
-      } catch (error) {
-        const msg = `Failed to push/create PR: ${String(error)}`;
-        logger.error(msg);
-        errors.push(msg);
+          const pr = await createOrUpdatePr(prDetails, config);
+
+          if (pr) prsCreated++;
+        } catch (error) {
+          const msg = `Failed to push/create PR: ${String(error)}`;
+          logger.error(msg);
+          errors.push(msg);
+        }
       }
     }
   }

@@ -121,7 +121,6 @@ export function buildPrBody(
   fixedPackages: string[],
   fixedIssueIds: string[],
   targetBranch: string,
-  config: RemediationConfig,
 ): string {
   return `## 🔒 Snyk Security Auto-Remediation
 

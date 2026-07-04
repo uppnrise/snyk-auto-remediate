@@ -57,3 +57,81 @@ export function groupByPackageManager(issues: SnykIssue[]): Map<string, SnykIssu
 
   return groups;
 }
+
+/**
+ * Infer the package-manager family (js, python, java, go, php, ruby, other)
+ * for a Snyk issue based on its ID prefix and, when present, the resourcePath
+ * of the affected coordinate.
+ *
+ * Returns undefined when the family cannot be inferred.
+ */
+export function inferIssueEcosystem(issue: SnykIssue): string | undefined {
+  // 1. Snyk issue IDs are typically prefixed with the ecosystem, e.g.
+  //    SNYK-JS-LODASH-590103, SNYK-PYTHON-DJANGO-*, SNYK-JAVA-ORG*, SNYK-GOLANG-*.
+  const idMatch = /^SNYK-([A-Z]+)-/.exec(issue.id);
+  if (idMatch && idMatch[1]) {
+    const token = idMatch[1].toLowerCase();
+    const mapping: Record<string, string> = {
+      js: 'js',
+      python: 'python',
+      java: 'java',
+      golang: 'go',
+      go: 'go',
+      php: 'php',
+      ruby: 'ruby',
+      composer: 'php',
+      cocoapods: 'swift',
+      swift: 'swift',
+    };
+    if (mapping[token]) return mapping[token];
+  }
+
+  // 2. Fall back to resourcePath heuristics.
+  for (const coord of issue.attributes.coordinates) {
+    const path = coord.representations?.[0]?.resourcePath?.toLowerCase();
+    if (!path) continue;
+    if (path.endsWith('package.json') || path.endsWith('package-lock.json') || path.endsWith('yarn.lock')) return 'js';
+    if (path.endsWith('requirements.txt') || path.endsWith('pyproject.toml') || path.endsWith('poetry.lock')) return 'python';
+    if (path.endsWith('pom.xml') || path.endsWith('build.gradle') || path.endsWith('build.gradle.kts')) return 'java';
+    if (path.endsWith('go.mod') || path.endsWith('go.sum')) return 'go';
+    if (path.endsWith('composer.json') || path.endsWith('composer.lock')) return 'php';
+  }
+
+  return undefined;
+}
+
+/**
+ * Map a PackageManager to its ecosystem family (see `inferIssueEcosystem`).
+ */
+export function packageManagerFamily(pm: string): string {
+  switch (pm) {
+    case 'npm':
+    case 'yarn':
+      return 'js';
+    case 'pip':
+    case 'poetry':
+      return 'python';
+    case 'maven':
+    case 'gradle':
+      return 'java';
+    case 'go':
+      return 'go';
+    case 'composer':
+      return 'php';
+    default:
+      return pm;
+  }
+}
+
+/**
+ * Filter issues that belong to the ecosystem of the given package manager.
+ * Issues whose ecosystem cannot be inferred are excluded to avoid running the
+ * wrong package manager against unrelated findings.
+ */
+export function filterIssuesForPackageManager(
+  issues: SnykIssue[],
+  packageManager: string,
+): SnykIssue[] {
+  const family = packageManagerFamily(packageManager);
+  return issues.filter((i) => inferIssueEcosystem(i) === family);
+}

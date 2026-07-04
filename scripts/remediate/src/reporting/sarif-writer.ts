@@ -1,6 +1,6 @@
 import { writeFileSync } from 'fs';
 import { join } from 'path';
-import type { RemediationReport, SnykIssue } from '../snyk/types.js';
+import type { SnykIssue } from '../snyk/types.js';
 import { logger } from '../utils/logger.js';
 
 export interface SarifResult {

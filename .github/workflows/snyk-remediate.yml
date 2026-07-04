@@ -44,12 +44,12 @@ jobs:
     name: Snyk Auto-Remediation
     uses: ./.github/workflows/snyk-remediate.reusable.yml
     with:
-      target-branches: ${{ github.event.inputs.target-branches || 'main' }}
-      severity-threshold: ${{ github.event.inputs.severity-threshold || 'high' }}
-      dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry-run == 'true' }}
-      max-prs-per-run: ${{ fromJSON(github.event.inputs.max-prs-per-run || '5') }}
-      max-issues-per-run: ${{ fromJSON(github.event.inputs.max-issues-per-run || '10') }}
-      enable-copilot-agent-fallback: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs.enable-copilot-agent-fallback == 'true' }}
+      target-branches: ${{ github.event.inputs['target-branches'] || 'main' }}
+      severity-threshold: ${{ github.event.inputs['severity-threshold'] || 'high' }}
+      dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['dry-run'] == 'true' }}
+      max-prs-per-run: ${{ fromJSON(github.event.inputs['max-prs-per-run'] || '5') }}
+      max-issues-per-run: ${{ fromJSON(github.event.inputs['max-issues-per-run'] || '10') }}
+      enable-copilot-agent-fallback: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs['enable-copilot-agent-fallback'] == 'true' }}
       pr-labels: 'security,dependencies,snyk,automated'
       issue-labels: 'security,snyk,ai-remediation'
       node-version: '20'
