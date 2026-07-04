@@ -7,8 +7,21 @@ const LEVELS: Record<LogLevel, number> = {
   error: 3,
 };
 
-const currentLevel: LogLevel =
-  (process.env['LOG_LEVEL'] as LogLevel | undefined) ?? 'info';
+function resolveLogLevel(): LogLevel {
+  const raw = process.env['LOG_LEVEL']?.toLowerCase();
+  if (raw && raw in LEVELS) {
+    return raw as LogLevel;
+  }
+  if (raw) {
+    // Cannot use logger here (circular), fall back to stderr write once.
+    process.stderr.write(
+      `[logger] Invalid LOG_LEVEL "${raw}", falling back to "info"\n`,
+    );
+  }
+  return 'info';
+}
+
+const currentLevel: LogLevel = resolveLogLevel();
 
 function maskSecrets(message: string): string {
   // Mask SNYK_TOKEN and GITHUB_TOKEN patterns
@@ -19,6 +32,30 @@ function maskSecrets(message: string): string {
     .replace(/snyk_[a-zA-Z0-9]{32,}/gi, 'snyk_***');
 }
 
+function safeStringify(value: unknown): string {
+  const seen = new WeakSet<object>();
+  try {
+    return JSON.stringify(value, (_key, val: unknown) => {
+      if (typeof val === 'bigint') return val.toString();
+      if (typeof val === 'function') return `[Function ${val.name || 'anonymous'}]`;
+      if (val instanceof Error) {
+        return { name: val.name, message: val.message, stack: val.stack };
+      }
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) return '[Circular]';
+        seen.add(val);
+      }
+      return val;
+    }) ?? String(value);
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return '[Unserializable]';
+    }
+  }
+}
+
 function log(level: LogLevel, message: string, ...args: unknown[]): void {
   if (LEVELS[level] < LEVELS[currentLevel]) return;
 
@@ -27,7 +64,7 @@ function log(level: LogLevel, message: string, ...args: unknown[]): void {
   const prefix = `[${timestamp}] [${level.toUpperCase()}]`;
 
   const formattedArgs = args.map((a) =>
-    typeof a === 'string' ? maskSecrets(a) : JSON.stringify(a),
+    maskSecrets(typeof a === 'string' ? a : safeStringify(a)),
   );
 
   const output = [prefix, safeMessage, ...formattedArgs].join(' ');

@@ -2,16 +2,6 @@ import { appendFileSync } from 'fs';
 import type { RemediationReport } from '../snyk/types.js';
 import { logger } from '../utils/logger.js';
 
-function severityEmoji(severity: string): string {
-  const map: Record<string, string> = {
-    critical: '🔴',
-    high: '🟠',
-    medium: '🟡',
-    low: '🟢',
-  };
-  return map[severity] ?? '⚪';
-}
-
 export function buildMarkdownSummary(report: RemediationReport): string {
   const lines: string[] = [
     `# 🔒 Snyk Auto-Remediation Summary`,

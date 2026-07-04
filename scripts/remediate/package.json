@@ -15,9 +15,7 @@
     "format": "prettier --write 'src/**/*.ts' 'tests/**/*.ts'",
     "format:check": "prettier --check 'src/**/*.ts' 'tests/**/*.ts'"
   },
-  "dependencies": {
-    "node-fetch": "^3.3.2"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.14.0",
     "@typescript-eslint/eslint-plugin": "^7.13.0",

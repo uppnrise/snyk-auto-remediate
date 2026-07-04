@@ -109,7 +109,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        branch: ${{ fromJson(format('["{0}"]', replace(inputs.target-branches, ',', '","'))) }}
+        branch: ${{ fromJson(format('["{0}"]', replace(replace(inputs['target-branches'], ' ', ''), ',', '","'))) }}
       fail-fast: false
 
     steps:
@@ -121,15 +121,15 @@ jobs:
           fetch-depth: 0
 
       # ── Toolchain: Node.js (always needed for the engine) ──────────────────
-      - name: Set up Node.js ${{ inputs.node-version }}
+      - name: Set up Node.js ${{ inputs['node-version'] }}
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs.node-version }}
+          node-version: ${{ inputs['node-version'] }}
 
       # ── Toolchain: Python (conditional) ────────────────────────────────────
       - name: Detect Python project
         id: detect-python
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ${{ inputs['working-directory'] }}
         run: |
           if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "poetry.lock" ]; then
             echo "python_needed=true" >> "$GITHUB_OUTPUT"
@@ -137,16 +137,16 @@ jobs:
             echo "python_needed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Python ${{ inputs.python-version }}
+      - name: Set up Python ${{ inputs['python-version'] }}
         if: steps.detect-python.outputs.python_needed == 'true'
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ inputs.python-version }}
+          python-version: ${{ inputs['python-version'] }}
 
       # ── Toolchain: Java (conditional) ──────────────────────────────────────
       - name: Detect Java project
         id: detect-java
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ${{ inputs['working-directory'] }}
         run: |
           if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
             echo "java_needed=true" >> "$GITHUB_OUTPUT"
@@ -154,17 +154,17 @@ jobs:
             echo "java_needed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Java ${{ inputs.java-version }}
+      - name: Set up Java ${{ inputs['java-version'] }}
         if: steps.detect-java.outputs.java_needed == 'true'
         uses: actions/setup-java@v4
         with:
-          java-version: ${{ inputs.java-version }}
+          java-version: ${{ inputs['java-version'] }}
           distribution: temurin
 
       # ── Toolchain: Go (conditional) ────────────────────────────────────────
       - name: Detect Go project
         id: detect-go
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ${{ inputs['working-directory'] }}
         run: |
           if [ -f "go.mod" ]; then
             echo "go_needed=true" >> "$GITHUB_OUTPUT"
@@ -172,11 +172,11 @@ jobs:
             echo "go_needed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up Go ${{ inputs.go-version }}
+      - name: Set up Go ${{ inputs['go-version'] }}
         if: steps.detect-go.outputs.go_needed == 'true'
         uses: actions/setup-go@v5
         with:
-          go-version: ${{ inputs.go-version }}
+          go-version: ${{ inputs['go-version'] }}
 
       # ── Snyk CLI ────────────────────────────────────────────────────────────
       - name: Install Snyk CLI
@@ -201,28 +201,28 @@ jobs:
       # ── Run remediation engine ──────────────────────────────────────────────
       - name: Run Snyk Auto-Remediation Engine
         id: remediate
-        working-directory: ${{ inputs.working-directory }}
+        working-directory: ${{ inputs['working-directory'] }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          SNYK_ORG_ID: ${{ inputs.snyk-org-id || vars.SNYK_ORG_ID || '' }}
-          SNYK_PROJECT_IDS: ${{ inputs.snyk-project-ids }}
+          SNYK_ORG_ID: ${{ inputs['snyk-org-id'] || vars.SNYK_ORG_ID || '' }}
+          SNYK_PROJECT_IDS: ${{ inputs['snyk-project-ids'] }}
           GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-          SEVERITY_THRESHOLD: ${{ inputs.severity-threshold }}
-          PACKAGE_MANAGERS: ${{ inputs.package-managers }}
-          DRY_RUN: ${{ inputs.dry-run }}
-          MAX_PRS_PER_RUN: ${{ inputs.max-prs-per-run }}
-          MAX_ISSUES_PER_RUN: ${{ inputs.max-issues-per-run }}
-          PR_LABELS: ${{ inputs.pr-labels }}
-          ISSUE_LABELS: ${{ inputs.issue-labels }}
-          PR_REVIEWERS: ${{ inputs.pr-reviewers }}
-          PR_TEAM_REVIEWERS: ${{ inputs.pr-team-reviewers }}
-          WORKING_DIRECTORY: ${{ inputs.working-directory }}
-          ENABLE_COPILOT_AGENT_FALLBACK: ${{ inputs.enable-copilot-agent-fallback }}
-          COPILOT_ASSIGNEE: ${{ inputs.copilot-assignee }}
-          FAIL_ON_NO_FIX: ${{ inputs.fail-on-no-fix }}
-          RUN_TESTS: ${{ inputs.run-tests }}
-          TEST_COMMAND: ${{ inputs.test-command }}
+          SEVERITY_THRESHOLD: ${{ inputs['severity-threshold'] }}
+          PACKAGE_MANAGERS: ${{ inputs['package-managers'] }}
+          DRY_RUN: ${{ inputs['dry-run'] }}
+          MAX_PRS_PER_RUN: ${{ inputs['max-prs-per-run'] }}
+          MAX_ISSUES_PER_RUN: ${{ inputs['max-issues-per-run'] }}
+          PR_LABELS: ${{ inputs['pr-labels'] }}
+          ISSUE_LABELS: ${{ inputs['issue-labels'] }}
+          PR_REVIEWERS: ${{ inputs['pr-reviewers'] }}
+          PR_TEAM_REVIEWERS: ${{ inputs['pr-team-reviewers'] }}
+          WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
+          ENABLE_COPILOT_AGENT_FALLBACK: ${{ inputs['enable-copilot-agent-fallback'] }}
+          COPILOT_ASSIGNEE: ${{ inputs['copilot-assignee'] }}
+          FAIL_ON_NO_FIX: ${{ inputs['fail-on-no-fix'] }}
+          RUN_TESTS: ${{ inputs['run-tests'] }}
+          TEST_COMMAND: ${{ inputs['test-command'] }}
           TARGET_BRANCH: ${{ matrix.branch }}
         run: npx tsx ${{ github.workspace }}/scripts/remediate/src/index.ts
 
