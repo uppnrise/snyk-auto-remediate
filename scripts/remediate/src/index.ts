@@ -100,34 +100,32 @@ async function main(): Promise<void> {
       }
     }
 
-    // Push and create PR
-    if (!config.dryRun) {
-      const hasChanges = await gitHasChanges(workingDir);
-      if (hasChanges || (await gitBranchExists(workingDir, `origin/${buildRemediationBranchName(config.targetBranch)}`))) {
-        try {
-          await gitPush(workingDir, branchName);
+    // Push and create PR only when there are actual commits to push
+    const hasFixes = fixResults.some((r) => r.success && r.fixedFindings.length > 0);
+    if (!config.dryRun && hasFixes) {
+      try {
+        await gitPush(workingDir, branchName);
 
-          const allFixedIds = fixResults.flatMap((r) => r.fixedFindings.map((f) => f.id));
-          const allChanges = fixResults.flatMap((r) => r.changesApplied);
+        const allFixedIds = fixResults.flatMap((r) => r.fixedFindings.map((f) => f.id));
+        const allChanges = fixResults.flatMap((r) => r.changesApplied);
 
-          const prDetails: import('./github/pr-creator.js').PrDetails = {
-            title: `fix(security): Snyk auto-remediation for ${config.targetBranch}`,
-            body: buildPrBody(allChanges, allFixedIds, config.targetBranch, config),
-            head: branchName,
-            base: config.targetBranch,
-            labels: config.prLabels,
-          };
-          if (config.prReviewers) prDetails.reviewers = config.prReviewers;
-          if (config.prTeamReviewers) prDetails.teamReviewers = config.prTeamReviewers;
+        const prDetails: import('./github/pr-creator.js').PrDetails = {
+          title: `fix(security): Snyk auto-remediation for ${config.targetBranch}`,
+          body: buildPrBody(allChanges, allFixedIds, config.targetBranch, config),
+          head: branchName,
+          base: config.targetBranch,
+          labels: config.prLabels,
+        };
+        if (config.prReviewers) prDetails.reviewers = config.prReviewers;
+        if (config.prTeamReviewers) prDetails.teamReviewers = config.prTeamReviewers;
 
-          const pr = await createOrUpdatePr(prDetails, config);
+        const pr = await createOrUpdatePr(prDetails, config);
 
-          if (pr) prsCreated++;
-        } catch (error) {
-          const msg = `Failed to push/create PR: ${String(error)}`;
-          logger.error(msg);
-          errors.push(msg);
-        }
+        if (pr) prsCreated++;
+      } catch (error) {
+        const msg = `Failed to push/create PR: ${String(error)}`;
+        logger.error(msg);
+        errors.push(msg);
       }
     }
   }
