@@ -36,6 +36,12 @@ describe('GitHub Actions workflows', () => {
     expect(reusable).toContain("${{ inputs['working-directory'] }}/snyk-remediation-report.json");
   });
 
+  it('fails fast with an actionable error when the Snyk token is unavailable', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    expect(reusable).toContain('if [ -z "$SNYK_TOKEN" ]; then');
+    expect(reusable).toContain('::error::SNYK_TOKEN is required');
+  });
+
   it('runs the complete validation suite for pull requests and pushes to master', () => {
     const ci = workflow('ci.yml');
     expect(ci).toContain('pull_request:');
