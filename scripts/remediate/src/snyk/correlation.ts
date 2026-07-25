@@ -3,11 +3,14 @@ import type {
   DetectedEcosystem,
   NonActionableFinding,
   RemediationAction,
+  Severity,
   SnykIssue,
 } from './types.js';
 
 interface RawCliVulnerability {
   id?: unknown;
+  title?: unknown;
+  severity?: unknown;
   packageName?: unknown;
   version?: unknown;
   fixedIn?: unknown;
@@ -74,6 +77,13 @@ export function normalizeCliOutput(raw: unknown, ecosystem: DetectedEcosystem): 
         isUpgradable: v.isUpgradable === true,
         isPatchable: v.isPatchable === true,
       };
+      if (typeof v.title === 'string') item.title = v.title;
+      if (
+        typeof v.severity === 'string' &&
+        ['info', 'low', 'medium', 'high', 'critical'].includes(v.severity)
+      ) {
+        item.severity = v.severity as Severity;
+      }
       if (typeof result.projectName === 'string') item.projectName = result.projectName;
       if (typeof result.projectId === 'string') item.projectId = result.projectId;
       return [item];

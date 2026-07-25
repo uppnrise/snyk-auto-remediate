@@ -6,11 +6,17 @@ A production-ready TypeScript engine for automatically remediating Snyk security
 
 This engine:
 
-1. **Fetches** Snyk security findings via the Snyk REST API (paginated, with retry/backoff)
+1. **Fetches** Snyk security findings via the Snyk REST API (paginated, with retry/backoff), with
+   authenticated local CLI inventory fallback when the account is not entitled to REST access
 2. **Classifies** findings into fixable and unfixable categories
 3. **Auto-fixes** dependency-level issues using package-manager-native commands
 4. **Creates GitHub Issues** assigned to `@copilot` for unfixable findings
 5. **Generates** JSON, SARIF, and Markdown reports
+
+On Snyk Free and Team plans, a valid CLI token can receive `403 Forbidden` from the REST issue
+inventory API. In that case the engine uses `snyk test --json` results from detected projects in
+`WORKING_DIRECTORY`. This fallback is repository-local and cannot discover issues elsewhere in the
+Snyk organization.
 
 ## Requirements
 
