@@ -1,6 +1,5 @@
 import { loadConfig } from './utils/config.js';
 import { logger } from './utils/logger.js';
-import { fetchSnykIssues } from './snyk/api-client.js';
 import { deduplicateIssues } from './utils/dedup.js';
 import { detectEcosystems } from './detectors/language-detector.js';
 import { NpmFixer } from './fixers/npm-fixer.js';
@@ -30,6 +29,7 @@ import {
 import { runPostFixTests } from './utils/test-runner.js';
 import type { FixResult, RemediationReport } from './snyk/types.js';
 import { scanWithSnykCli } from './snyk/cli-runner.js';
+import { loadIssueInventory } from './snyk/cli-inventory.js';
 import { buildRemediationPlan, unresolvedFindingKeys } from './snyk/correlation.js';
 import { resolve } from 'path';
 
@@ -54,13 +54,7 @@ async function main(): Promise<void> {
   let issuesCreated = 0;
   let prsCreated = 0;
 
-  // 1. Fetch Snyk issues
-  logger.info('Fetching Snyk issues...');
-  let allIssues = await fetchSnykIssues(config);
-  allIssues = deduplicateIssues(allIssues);
-  logger.info(`Total unique issues: ${allIssues.length}`);
-
-  // 2. Detect ecosystems and obtain exact remediation evidence from local CLI scans.
+  // 1. Detect ecosystems and obtain exact remediation evidence from local CLI scans.
   const ecosystems = detectEcosystems(workingDir, config.packageManagers);
   const cliFindings = (
     await Promise.all(
@@ -74,6 +68,14 @@ async function main(): Promise<void> {
       }),
     )
   ).flat();
+
+  // 2. Prefer organization REST inventory, but retain a local CLI-only mode for plans without
+  // API entitlement. Authentication and all other REST failures remain fatal.
+  logger.info('Fetching Snyk issues...');
+  let allIssues = await loadIssueInventory(config, cliFindings);
+  allIssues = deduplicateIssues(allIssues);
+  logger.info(`Total unique issues: ${allIssues.length}`);
+
   const plan = buildRemediationPlan(allIssues, cliFindings);
   const runtimeNonActionable = [...plan.nonActionable];
   const findingsById = new Map(allIssues.map((issue) => [issue.id, issue]));

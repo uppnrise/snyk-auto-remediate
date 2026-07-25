@@ -12,8 +12,10 @@ function workflow(name: string): string {
 
 describe('GitHub Actions workflows', () => {
   it('defaults remediation to the repository default branch', () => {
-    expect(workflow('snyk-remediate.yml')).not.toContain("'main'");
-    expect(workflow('snyk-remediate.yml')).toContain("'master'");
+    const entry = workflow('snyk-remediate.yml');
+    expect(entry).not.toContain("'main'");
+    expect(entry).toContain("'master'");
+    expect(entry).toContain("working-directory: 'scripts/remediate'");
     expect(workflow('snyk-remediate.reusable.yml')).toContain("default: 'master'");
   });
 

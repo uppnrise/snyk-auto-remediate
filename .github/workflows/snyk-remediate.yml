@@ -52,6 +52,7 @@ jobs:
       enable-copilot-agent-fallback: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs['enable-copilot-agent-fallback'] == 'true' }}
       pr-labels: 'security,dependencies,snyk,automated'
       issue-labels: 'security,snyk,ai-remediation'
+      working-directory: 'scripts/remediate'
       node-version: '20'
       python-version: '3.12'
       java-version: '21'

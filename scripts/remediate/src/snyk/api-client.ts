@@ -6,6 +6,16 @@ const API_BASE = `${API_ORIGIN}/rest`;
 const API_VERSION = '2024-10-15';
 const MAX_RETRIES = 3;
 
+export class SnykApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly responseBody: string,
+  ) {
+    super(`Snyk API error ${status}: ${responseBody}`);
+    this.name = 'SnykApiError';
+  }
+}
+
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 const isString = (value: unknown): value is string => typeof value === 'string';
@@ -134,8 +144,7 @@ async function fetchScope(config: RemediationConfig, projectId?: string): Promis
     const response = await fetchWithRetry(current.toString(), {
       headers: { Authorization: `token ${config.snykToken}`, Accept: 'application/vnd.api+json' },
     });
-    if (!response.ok)
-      throw new Error(`Snyk API error ${response.status}: ${await response.text()}`);
+    if (!response.ok) throw new SnykApiError(response.status, await response.text());
     const decoded = decodeIssuesResponse(await response.json());
     issues.push(
       ...decoded.data.filter(

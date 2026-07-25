@@ -211,6 +211,12 @@ The SARIF writer maps:
 
 The engine is configured entirely through environment variables loaded by [`scripts/remediate/src/utils/config.ts`](scripts/remediate/src/utils/config.ts).
 
+The engine prefers the Snyk REST API for organization-wide issue inventory. If Snyk returns
+`403 Forbidden` because the account plan does not include API access, it automatically falls back
+to findings from authenticated local `snyk test --json` scans. CLI-only mode is limited to detected
+projects in `WORKING_DIRECTORY`; it does not provide organization-wide inventory. Other REST
+failures remain fatal.
+
 ### Required
 
 | Variable | Purpose |
