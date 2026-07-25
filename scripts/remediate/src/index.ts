@@ -30,7 +30,7 @@ import {
 import { runPostFixTests } from './utils/test-runner.js';
 import type { FixResult, RemediationReport } from './snyk/types.js';
 import { scanWithSnykCli } from './snyk/cli-runner.js';
-import { buildRemediationPlan } from './snyk/correlation.js';
+import { buildRemediationPlan, unresolvedFindingKeys } from './snyk/correlation.js';
 import { resolve } from 'path';
 
 const FIXERS: BaseFixer[] = [
@@ -124,10 +124,7 @@ async function main(): Promise<void> {
       if (result.success && !config.dryRun) {
         try {
           const after = await scanWithSnykCli(ecosystem, config.snykToken);
-          const remainingKeys = new Set(after.map((finding) => finding.issueKey));
-          const unverified = relevantActions
-            .flatMap((action) => action.findingKeys)
-            .filter((key) => remainingKeys.has(key));
+          const unverified = unresolvedFindingKeys(relevantActions, after);
           if (unverified.length > 0) {
             fixer.rollback();
             result.success = false;
