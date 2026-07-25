@@ -51,6 +51,41 @@ The reusable workflow:
 
 This makes the repo usable both as a scheduled security automation and as a reusable GitHub Actions component.
 
+### Scan another repository
+
+The reusable workflow checks out the remediation engine separately from the repository being
+scanned. Call it from a workflow in the target repository:
+
+```yaml
+name: Snyk remediation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  remediate:
+    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@master
+    with:
+      target-repository: owner/application-repo
+      target-branches: master
+      engine-ref: master
+      working-directory: .
+      dry-run: true
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+```
+
+`target-repository` uses `owner/repo` syntax and defaults to the caller repository.
+`working-directory` is relative to the target repository. Pin `engine-ref` and the reusable
+workflow reference to a release tag or commit SHA for production use.
+
+The caller's `github.token` is sufficient when scanning its own repository and repository workflow
+permissions permit the requested operations. Use `GH_PAT` for a different private repository or
+for cross-repository branch, issue, and pull-request writes. A public target can be scanned in
+dry-run mode without cross-repository write access. SARIF is uploaded to the caller repository's
+code-scanning view; JSON and SARIF artifacts remain attached to the workflow run.
+
 ### 2. Engine Layer
 
 The actual business logic lives in [`scripts/remediate/src`](scripts/remediate/src).

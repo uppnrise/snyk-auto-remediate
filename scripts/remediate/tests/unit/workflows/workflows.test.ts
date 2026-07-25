@@ -26,16 +26,36 @@ describe('GitHub Actions workflows', () => {
       reusable.indexOf('- name: Upload SARIF report'),
     );
 
-    expect(engineStep).not.toContain("working-directory: ${{ inputs['working-directory'] }}");
-    expect(engineStep).toContain("WORKING_DIRECTORY: ${{ inputs['working-directory'] }}");
+    expect(engineStep).toContain(
+      "WORKING_DIRECTORY: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}",
+    );
   });
 
   it('uploads reports from the configured working directory', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain(
-      "sarif_file: ${{ inputs['working-directory'] }}/snyk-remediation-report.sarif",
+      "sarif_file: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.sarif",
     );
-    expect(reusable).toContain("${{ inputs['working-directory'] }}/snyk-remediation-report.json");
+    expect(reusable).toContain(
+      "${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.json",
+    );
+  });
+
+  it('checks out the target and remediation engine independently', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    expect(reusable).toContain('target-repository:');
+    expect(reusable).toContain('engine-ref:');
+    expect(reusable).toContain(
+      "repository: ${{ inputs['target-repository'] || github.repository }}",
+    );
+    expect(reusable).toContain('repository: uppnrise/snyk-auto-remediate');
+    expect(reusable).toContain('path: target');
+    expect(reusable).toContain('path: .snyk-auto-remediate');
+    expect(reusable).toContain(
+      "GITHUB_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}",
+    );
+    expect(reusable).toContain('target-repository must use owner/repo syntax');
+    expect(reusable).toContain('working-directory must stay inside the target repository');
   });
 
   it('fails fast with an actionable error when the Snyk token is unavailable', () => {

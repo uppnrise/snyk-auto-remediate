@@ -44,6 +44,7 @@ jobs:
     name: Snyk Auto-Remediation
     uses: ./.github/workflows/snyk-remediate.reusable.yml
     with:
+      engine-ref: ${{ github.ref_name }}
       target-branches: ${{ github.event.inputs['target-branches'] || 'master' }}
       severity-threshold: ${{ github.event.inputs['severity-threshold'] || 'high' }}
       dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['dry-run'] == 'true' }}
