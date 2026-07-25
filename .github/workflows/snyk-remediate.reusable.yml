@@ -6,7 +6,7 @@ on:
       target-branches:
         description: 'Comma-separated target branches to remediate'
         type: string
-        default: 'main'
+        default: 'master'
       severity-threshold:
         description: 'Minimum severity to remediate (critical|high|medium|low)'
         type: string
@@ -220,7 +220,6 @@ jobs:
       # ── Run remediation engine ──────────────────────────────────────────────
       - name: Run Snyk Auto-Remediation Engine
         id: remediate
-        working-directory: ${{ inputs['working-directory'] }}
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           SNYK_ORG_ID: ${{ inputs['snyk-org-id'] || vars.SNYK_ORG_ID || '' }}
@@ -243,14 +242,14 @@ jobs:
           RUN_TESTS: ${{ inputs['run-tests'] }}
           TEST_COMMAND: ${{ inputs['test-command'] }}
           TARGET_BRANCH: ${{ matrix.branch }}
-        run: npx tsx ${{ github.workspace }}/scripts/remediate/src/index.ts
+        run: ${{ github.workspace }}/scripts/remediate/node_modules/.bin/tsx ${{ github.workspace }}/scripts/remediate/src/index.ts
 
       # ── Upload SARIF to GitHub Security ────────────────────────────────────
       - name: Upload SARIF report
-        if: always() && hashFiles('**/snyk-remediation-report.sarif') != ''
+        if: always() && hashFiles(format('{0}/snyk-remediation-report.sarif', inputs['working-directory'])) != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: snyk-remediation-report.sarif
+          sarif_file: ${{ inputs['working-directory'] }}/snyk-remediation-report.sarif
           category: snyk-auto-remediation
 
       # ── Upload JSON + SARIF artifacts ──────────────────────────────────────
@@ -258,9 +257,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snyk-remediation-report-${{ matrix.branch }}-${{ github.run_id }}
+          name: snyk-remediation-report-${{ strategy.job-index }}-${{ github.run_id }}
           path: |
-            **/snyk-remediation-report.json
-            **/snyk-remediation-report.sarif
+            ${{ inputs['working-directory'] }}/snyk-remediation-report.json
+            ${{ inputs['working-directory'] }}/snyk-remediation-report.sarif
           if-no-files-found: ignore
           retention-days: 30
