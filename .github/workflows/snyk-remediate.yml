@@ -6,7 +6,7 @@ on:
       target-branches:
         description: 'Comma-separated target branches to remediate'
         type: string
-        default: 'main'
+        default: 'master'
       severity-threshold:
         description: 'Minimum severity (critical|high|medium|low)'
         type: choice
@@ -44,7 +44,8 @@ jobs:
     name: Snyk Auto-Remediation
     uses: ./.github/workflows/snyk-remediate.reusable.yml
     with:
-      target-branches: ${{ github.event.inputs['target-branches'] || 'main' }}
+      engine-ref: ${{ github.ref_name }}
+      target-branches: ${{ github.event.inputs['target-branches'] || 'master' }}
       severity-threshold: ${{ github.event.inputs['severity-threshold'] || 'high' }}
       dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['dry-run'] == 'true' }}
       max-prs-per-run: ${{ fromJSON(github.event.inputs['max-prs-per-run'] || '5') }}
@@ -52,6 +53,7 @@ jobs:
       enable-copilot-agent-fallback: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs['enable-copilot-agent-fallback'] == 'true' }}
       pr-labels: 'security,dependencies,snyk,automated'
       issue-labels: 'security,snyk,ai-remediation'
+      working-directory: 'scripts/remediate'
       node-version: '20'
       python-version: '3.12'
       java-version: '21'

@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import { buildCliInventory, loadIssueInventory } from '../../../src/snyk/cli-inventory.js';
+import { SnykApiError } from '../../../src/snyk/api-client.js';
+import { buildRemediationPlan } from '../../../src/snyk/correlation.js';
+import type { CliVulnerability, RemediationConfig, SnykIssue } from '../../../src/snyk/types.js';
+
+const upgradable: CliVulnerability = {
+  issueKey: 'SNYK-JS-LODASH-590103',
+  title: 'Prototype Pollution',
+  severity: 'high',
+  packageName: 'lodash',
+  version: '4.17.15',
+  packageManager: 'npm',
+  projectName: 'local-project',
+  fixedIn: ['4.17.21'],
+  upgradePath: ['lodash@4.17.21'],
+  dependencyPath: ['lodash@4.17.15'],
+  isUpgradable: true,
+  isPatchable: false,
+};
+
+describe('CLI-only issue inventory', () => {
+  it('creates stable REST-shaped findings that retain exact CLI remediation evidence', () => {
+    const first = buildCliInventory([upgradable], 'org-id', 'high');
+    const second = buildCliInventory([upgradable], 'org-id', 'high');
+
+    expect(first).toHaveLength(1);
+    expect(first[0]?.id).toBe(second[0]?.id);
+    expect(first[0]).toMatchObject({
+      attributes: {
+        key: upgradable.issueKey,
+        title: upgradable.title,
+        effective_severity_level: 'high',
+      },
+      relationships: {
+        organization: { data: { id: 'org-id', type: 'organization' } },
+      },
+    });
+    expect(buildRemediationPlan(first, [upgradable]).actions).toEqual([
+      expect.objectContaining({
+        packageName: 'lodash',
+        targetVersion: '4.17.21',
+        evidence: 'snyk-cli-upgrade-path',
+      }),
+    ]);
+  });
+
+  it('filters below-threshold findings and deduplicates identical CLI occurrences', () => {
+    expect(
+      buildCliInventory(
+        [upgradable, upgradable, { ...upgradable, issueKey: 'LOW', severity: 'low' }],
+        'org-id',
+        'high',
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('uses CLI inventory only for REST 403 responses', async () => {
+    const config = {
+      snykOrgId: 'org-id',
+      severityThreshold: 'high',
+    } as RemediationConfig;
+    const forbidden = (): Promise<SnykIssue[]> =>
+      Promise.reject(new SnykApiError(403, 'Forbidden'));
+    const unauthorized = (): Promise<SnykIssue[]> =>
+      Promise.reject(new SnykApiError(401, 'Unauthorized'));
+
+    await expect(loadIssueInventory(config, [upgradable], forbidden)).resolves.toHaveLength(1);
+    await expect(loadIssueInventory(config, [upgradable], unauthorized)).rejects.toMatchObject({
+      status: 401,
+    });
+  });
+});

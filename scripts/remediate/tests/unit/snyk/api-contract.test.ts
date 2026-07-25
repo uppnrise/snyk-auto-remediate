@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { decodeIssuesResponse, fetchSnykIssues } from '../../../src/snyk/api-client.js';
+import {
+  decodeIssuesResponse,
+  fetchSnykIssues,
+  SnykApiError,
+} from '../../../src/snyk/api-client.js';
 import type { RemediationConfig } from '../../../src/snyk/types.js';
 
 const sparseIssue = {
@@ -82,5 +86,24 @@ describe('Snyk REST contract', () => {
     } as RemediationConfig;
 
     await expect(fetchSnykIssues(config)).rejects.toThrow(/untrusted pagination/i);
+  });
+
+  it('exposes forbidden responses so callers can select CLI-only inventory', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          jsonapi: { version: '1.0' },
+          errors: [{ status: '403', title: 'Forbidden' }],
+        }),
+        { status: 403 },
+      ),
+    );
+    const config = {
+      snykToken: 'token',
+      snykOrgId: '11111111-1111-4111-8111-111111111111',
+      severityThreshold: 'high',
+    } as RemediationConfig;
+
+    await expect(fetchSnykIssues(config)).rejects.toMatchObject<SnykApiError>({ status: 403 });
   });
 });
