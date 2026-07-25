@@ -47,6 +47,13 @@ describe('loadConfig', () => {
     expect(config.dryRun).toBe(true);
   });
 
+  it('should load a remediation branch suffix', () => {
+    setRequiredEnv();
+    process.env['REMEDIATION_BRANCH_SUFFIX'] = 'maven';
+    const config = loadConfig();
+    expect(config.remediationBranchSuffix).toBe('maven');
+  });
+
   it('should parse SEVERITY_THRESHOLD', () => {
     setRequiredEnv();
     process.env['SEVERITY_THRESHOLD'] = 'critical';

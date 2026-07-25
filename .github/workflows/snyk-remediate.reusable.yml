@@ -302,6 +302,7 @@ jobs:
           RUN_TESTS: ${{ inputs['run-tests'] }}
           TEST_COMMAND: ${{ inputs['test-command'] }}
           TARGET_BRANCH: ${{ matrix.branch }}
+          REMEDIATION_BRANCH_SUFFIX: ${{ inputs['report-id'] }}
         run: ${{ github.workspace }}/.snyk-auto-remediate/scripts/remediate/node_modules/.bin/tsx ${{ github.workspace }}/.snyk-auto-remediate/scripts/remediate/src/index.ts
 
       # ── Upload SARIF to GitHub Security ────────────────────────────────────

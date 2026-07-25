@@ -59,10 +59,12 @@ export async function gitBranchExists(
   }
 }
 
-export function buildRemediationBranchName(targetBranch: string): string {
+export function buildRemediationBranchName(targetBranch: string, suffix?: string): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '-');
-  return `chore/security/snyk-remediation-${safeBranch}-${date}`;
+  const safeSuffix = suffix?.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const suffixSegment = safeSuffix ? `-${safeSuffix}` : '';
+  return `chore/security/snyk-remediation-${safeBranch}${suffixSegment}-${date}`;
 }
 
 export async function gitPush(workingDirectory: string, branchName: string): Promise<void> {

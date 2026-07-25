@@ -18,4 +18,13 @@ describe('buildRemediationBranchName', () => {
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     expect(name).toContain(today);
   });
+
+  it('should isolate remediation branches by job identifier', () => {
+    const maven = buildRemediationBranchName('main', 'maven');
+    const dashboard = buildRemediationBranchName('main', 'dashboard');
+
+    expect(maven).toMatch(/^chore\/security\/snyk-remediation-main-maven-\d{8}$/);
+    expect(dashboard).toMatch(/^chore\/security\/snyk-remediation-main-dashboard-\d{8}$/);
+    expect(maven).not.toBe(dashboard);
+  });
 });

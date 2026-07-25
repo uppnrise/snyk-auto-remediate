@@ -92,7 +92,10 @@ async function main(): Promise<void> {
     }
 
     // Create remediation branch
-    const branchName = buildRemediationBranchName(config.targetBranch);
+    const branchName = buildRemediationBranchName(
+      config.targetBranch,
+      config.remediationBranchSuffix,
+    );
     logger.info(`Using branch: ${branchName}`);
 
     if (!config.dryRun) {
