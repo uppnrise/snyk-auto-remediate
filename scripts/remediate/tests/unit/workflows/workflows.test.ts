@@ -27,18 +27,29 @@ describe('GitHub Actions workflows', () => {
     );
 
     expect(engineStep).toContain(
-      "WORKING_DIRECTORY: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}",
+      'WORKING_DIRECTORY: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}',
     );
   });
 
   it('uploads reports from the configured working directory', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain(
-      "sarif_file: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.sarif",
+      'sarif_file: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif',
     );
     expect(reusable).toContain(
-      "${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.json",
+      '${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.json',
     );
+    expect(reusable).toContain('report-id:');
+    expect(reusable).toContain(
+      "name: snyk-remediation-${{ inputs['report-id'] }}-${{ strategy.job-index }}-${{ github.run_id }}",
+    );
+  });
+
+  it('normalizes the root working directory for report actions', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    expect(reusable).toContain('echo "target_path=target" >> "$GITHUB_OUTPUT"');
+    expect(reusable).toContain('echo "target_path=target/$working_directory" >> "$GITHUB_OUTPUT"');
+    expect(reusable).not.toContain("hashFiles(format('target/{0}/");
   });
 
   it('checks out the target and remediation engine independently', () => {

@@ -15,6 +15,10 @@ on:
         description: 'Branch, tag, or SHA of uppnrise/snyk-auto-remediate containing the engine'
         type: string
         default: 'master'
+      report-id:
+        description: 'Unique report identifier when invoking the reusable workflow more than once'
+        type: string
+        default: 'scan'
       severity-threshold:
         description: 'Minimum severity to remediate (critical|high|medium|low)'
         type: string
@@ -117,12 +121,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       branches: ${{ steps.branches.outputs.json }}
+      target-path: ${{ steps.paths.outputs.target_path }}
     steps:
       - name: Validate repository inputs
+        id: paths
         env:
           TARGET_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}
           TARGET_WORKING_DIRECTORY: ${{ inputs['working-directory'] }}
           ENGINE_REF: ${{ inputs['engine-ref'] }}
+          REPORT_ID: ${{ inputs['report-id'] }}
         run: |
           if ! [[ "$TARGET_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
             echo "::error::target-repository must use owner/repo syntax"
@@ -135,6 +142,17 @@ jobs:
           if [ -z "$ENGINE_REF" ]; then
             echo "::error::engine-ref must name a branch, tag, or commit SHA"
             exit 1
+          fi
+          if ! [[ "$REPORT_ID" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+            echo "::error::report-id may contain only letters, numbers, dots, underscores, and hyphens"
+            exit 1
+          fi
+          working_directory="${TARGET_WORKING_DIRECTORY#./}"
+          working_directory="${working_directory%/}"
+          if [ -z "$working_directory" ] || [ "$working_directory" = "." ]; then
+            echo "target_path=target" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_path=target/$working_directory" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Build branch matrix
@@ -185,7 +203,7 @@ jobs:
       # ── Toolchain: Python (conditional) ────────────────────────────────────
       - name: Detect Python project
         id: detect-python
-        working-directory: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}
+        working-directory: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}
         run: |
           if [ -f "requirements.txt" ] || [ -f "pyproject.toml" ] || [ -f "poetry.lock" ]; then
             echo "python_needed=true" >> "$GITHUB_OUTPUT"
@@ -202,7 +220,7 @@ jobs:
       # ── Toolchain: Java (conditional) ──────────────────────────────────────
       - name: Detect Java project
         id: detect-java
-        working-directory: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}
+        working-directory: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}
         run: |
           if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
             echo "java_needed=true" >> "$GITHUB_OUTPUT"
@@ -220,7 +238,7 @@ jobs:
       # ── Toolchain: Go (conditional) ────────────────────────────────────────
       - name: Detect Go project
         id: detect-go
-        working-directory: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}
+        working-directory: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}
         run: |
           if [ -f "go.mod" ]; then
             echo "go_needed=true" >> "$GITHUB_OUTPUT"
@@ -277,7 +295,7 @@ jobs:
           ISSUE_LABELS: ${{ inputs['issue-labels'] }}
           PR_REVIEWERS: ${{ inputs['pr-reviewers'] }}
           PR_TEAM_REVIEWERS: ${{ inputs['pr-team-reviewers'] }}
-          WORKING_DIRECTORY: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}
+          WORKING_DIRECTORY: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}
           ENABLE_COPILOT_AGENT_FALLBACK: ${{ inputs['enable-copilot-agent-fallback'] }}
           COPILOT_ASSIGNEE: ${{ inputs['copilot-assignee'] }}
           FAIL_ON_NO_FIX: ${{ inputs['fail-on-no-fix'] }}
@@ -288,20 +306,20 @@ jobs:
 
       # ── Upload SARIF to GitHub Security ────────────────────────────────────
       - name: Upload SARIF report
-        if: always() && hashFiles(format('target/{0}/snyk-remediation-report.sarif', inputs['working-directory'])) != ''
+        if: always() && hashFiles(format('{0}/snyk-remediation-report.sarif', needs.prepare.outputs.target-path)) != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.sarif
-          category: snyk-auto-remediation
+          sarif_file: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif
+          category: snyk-auto-remediation-${{ inputs['report-id'] }}
 
       # ── Upload JSON + SARIF artifacts ──────────────────────────────────────
       - name: Upload remediation artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: snyk-remediation-report-${{ strategy.job-index }}-${{ github.run_id }}
+          name: snyk-remediation-${{ inputs['report-id'] }}-${{ strategy.job-index }}-${{ github.run_id }}
           path: |
-            ${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.json
-            ${{ github.workspace }}/target/${{ inputs['working-directory'] }}/snyk-remediation-report.sarif
+            ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.json
+            ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif
           if-no-files-found: ignore
           retention-days: 30
