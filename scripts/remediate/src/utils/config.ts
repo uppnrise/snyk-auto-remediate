@@ -1,4 +1,4 @@
-import type { RemediationConfig, Severity, PackageManager } from '../snyk/types.js';
+import type { RemediationConfig, SeverityThreshold, PackageManager } from '../snyk/types.js';
 import { logger } from './logger.js';
 
 function requireEnv(name: string): string {
@@ -35,9 +35,9 @@ function parseListEnv(name: string, defaultValue: string[]): string[] {
     .filter(Boolean);
 }
 
-function parseSeverity(value: string): Severity {
-  const valid: Severity[] = ['critical', 'high', 'medium', 'low'];
-  const lower = value.toLowerCase() as Severity;
+function parseSeverity(value: string): SeverityThreshold {
+  const valid: SeverityThreshold[] = ['critical', 'high', 'medium', 'low'];
+  const lower = value.toLowerCase() as SeverityThreshold;
   if (valid.includes(lower)) return lower;
   logger.warn(`Invalid severity threshold "${value}", defaulting to "high"`);
   return 'high';

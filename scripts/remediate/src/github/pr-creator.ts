@@ -22,7 +22,9 @@ export async function createOrUpdatePr(
   config: RemediationConfig,
 ): Promise<CreatedPr | null> {
   if (config.dryRun) {
-    logger.info(`[dry-run] Would create PR: "${details.title}" (${details.head} -> ${details.base})`);
+    logger.info(
+      `[dry-run] Would create PR: "${details.title}" (${details.head} -> ${details.base})`,
+    );
     return null;
   }
 

@@ -61,7 +61,7 @@ export async function gitBranchExists(
 
 export function buildRemediationBranchName(targetBranch: string): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_\-]/g, '-');
+  const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '-');
   return `chore/security/snyk-remediation-${safeBranch}-${date}`;
 }
 
