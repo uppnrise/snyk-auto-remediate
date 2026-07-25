@@ -152,6 +152,7 @@ export interface RemediationConfig {
   prReviewers?: string[];
   prTeamReviewers?: string[];
   targetBranch: string;
+  remediationBranchSuffix?: string;
 }
 export interface RemediationReport {
   timestamp: string;

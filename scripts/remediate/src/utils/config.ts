@@ -68,6 +68,7 @@ export function loadConfig(): RemediationConfig {
   const prReviewersList = parseListEnv('PR_REVIEWERS', []);
   const prTeamReviewersList = parseListEnv('PR_TEAM_REVIEWERS', []);
   const testCommandValue = process.env['TEST_COMMAND'];
+  const remediationBranchSuffix = process.env['REMEDIATION_BRANCH_SUFFIX'];
 
   const base: RemediationConfig = {
     snykToken,
@@ -91,6 +92,9 @@ export function loadConfig(): RemediationConfig {
   if (snykProjectIds !== undefined) base.snykProjectIds = snykProjectIds;
   if (packageManagers !== undefined) base.packageManagers = packageManagers;
   if (testCommandValue !== undefined) base.testCommand = testCommandValue;
+  if (remediationBranchSuffix !== undefined) {
+    base.remediationBranchSuffix = remediationBranchSuffix;
+  }
   if (prReviewersList.length > 0) base.prReviewers = prReviewersList;
   if (prTeamReviewersList.length > 0) base.prTeamReviewers = prTeamReviewersList;
 

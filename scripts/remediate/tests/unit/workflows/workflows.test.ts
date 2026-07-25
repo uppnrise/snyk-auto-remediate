@@ -43,6 +43,7 @@ describe('GitHub Actions workflows', () => {
     expect(reusable).toContain(
       "name: snyk-remediation-${{ inputs['report-id'] }}-${{ strategy.job-index }}-${{ github.run_id }}",
     );
+    expect(reusable).toContain("REMEDIATION_BRANCH_SUFFIX: ${{ inputs['report-id'] }}");
   });
 
   it('normalizes the root working directory for report actions', () => {
