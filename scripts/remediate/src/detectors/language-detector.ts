@@ -30,9 +30,7 @@ export function detectEcosystems(
       continue;
     }
 
-    const foundFiles = sig.manifestFiles.filter((file) =>
-      existsSync(join(workingDirectory, file)),
-    );
+    const foundFiles = sig.manifestFiles.filter((file) => existsSync(join(workingDirectory, file)));
 
     if (foundFiles.length > 0) {
       detected.push({
@@ -40,14 +38,10 @@ export function detectEcosystems(
         manifestFiles: foundFiles,
         workingDirectory,
       });
-      logger.debug(
-        `Detected ${sig.packageManager} ecosystem (files: ${foundFiles.join(', ')})`,
-      );
+      logger.debug(`Detected ${sig.packageManager} ecosystem (files: ${foundFiles.join(', ')})`);
     }
   }
 
-  logger.info(
-    `Detected ecosystems: ${detected.map((d) => d.packageManager).join(', ') || 'none'}`,
-  );
+  logger.info(`Detected ecosystems: ${detected.map((d) => d.packageManager).join(', ') || 'none'}`);
   return detected;
 }

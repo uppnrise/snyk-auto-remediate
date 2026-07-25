@@ -74,7 +74,7 @@ export function buildSarifOutput(issues: SnykIssue[], repository: string): Sarif
 
   for (const issue of issues) {
     const attrs = issue.attributes;
-    const ruleId = issue.id;
+    const ruleId = attrs.key;
 
     if (!ruleIds.has(ruleId)) {
       ruleIds.add(ruleId);
@@ -115,7 +115,8 @@ export function buildSarifOutput(issues: SnykIssue[], repository: string): Sarif
 
   return {
     version: '2.1.0',
-    $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
+    $schema:
+      'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
     runs: [
       {
         tool: {

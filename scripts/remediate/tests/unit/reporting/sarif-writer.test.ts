@@ -100,8 +100,8 @@ describe('buildSarifOutput', () => {
 
     const sarif = buildSarifOutput([criticalIssue, mediumIssue, lowIssue], 'owner/repo');
     const results = sarif.runs[0]!.results;
-    expect(results[0]!.level).toBe('error');   // critical
+    expect(results[0]!.level).toBe('error'); // critical
     expect(results[1]!.level).toBe('warning'); // medium
-    expect(results[2]!.level).toBe('note');    // low
+    expect(results[2]!.level).toBe('note'); // low
   });
 });
