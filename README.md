@@ -12,17 +12,19 @@ The current implementation is intentionally pragmatic. It favors package-manager
 For each target branch, the system runs this pipeline:
 
 1. Fetch open Snyk issues from the Snyk REST API for one organization, optionally scoped to specific Snyk project IDs.
-2. Filter findings by severity threshold.
-3. Deduplicate findings by Snyk issue ID.
-4. Partition findings into fixable and unfixable buckets based on Snyk coordinate flags and remedies.
-5. Detect which dependency ecosystems exist in the repository working directory.
-6. Route fixable findings to a matching fixer for that ecosystem.
-7. Apply dependency upgrades using the ecosystem’s native package manager.
-8. Commit changes to a generated remediation branch.
-9. Optionally run post-fix tests.
-10. Push the remediation branch and create one pull request back to the target branch.
-11. Create or update GitHub Issues for unfixable findings, optionally assigning them to `@copilot`.
-12. Emit JSON, SARIF, and GitHub Actions summary output.
+2. Validate the JSON:API response and filter findings by severity threshold.
+3. Deduplicate findings by the REST resource ID.
+4. Run an authenticated local Snyk CLI scan for each detected ecosystem and correlate findings by `attributes.key`.
+5. Build an exact remediation action only when the CLI provides an unambiguous upgrade path or fixed version.
+6. Detect which dependency ecosystems exist in the repository working directory.
+7. Route exact actions to the matching fixer.
+8. Apply exact dependency upgrades using the ecosystem’s native package manager.
+9. Re-scan with the CLI and roll back changes when the correlated finding remains.
+10. Commit verified changes to a generated remediation branch.
+11. Optionally run post-fix tests.
+12. Push the remediation branch and create one pull request back to the target branch.
+13. Create or update GitHub Issues for findings without a safe exact action.
+14. Emit JSON, SARIF, and GitHub Actions summary output.
 
 ## Repository Shape
 
@@ -97,6 +99,24 @@ Important details:
 - Findings are filtered using `effective_severity_level`, not just the raw `severity` field.
 - Project scoping is implemented through repeated `scan_item.id` query parameters with `scan_item.type=project`.
 - The engine only processes open issues.
+- REST issue IDs are treated as opaque resource identifiers; the human-readable Snyk vulnerability key comes from `attributes.key`.
+- `coordinates` and `problems` are optional. Code, IaC, Cloud, or sparse Open Source findings cannot crash classification.
+- Multiple configured project IDs are fetched in separate requests because `scan_item.id` is scalar.
+- Pagination is restricted to `https://api.snyk.io/rest` so the authentication token is never forwarded to another origin.
+
+### Exact remediation evidence
+
+The REST Issues API supplies inventory and reporting metadata, but its remedy schema does not contain a supported
+`target_version`. The engine therefore uses the already-installed Snyk CLI as the authoritative source for
+`upgradePath` and `fixedIn`. It never parses versions from remedy prose and never substitutes `latest`.
+
+An action is sent to a fixer only when the REST key correlates to one unambiguous CLI vulnerability and produces an
+exact target. Patch-only, ambiguous, computed-manifest, and uncorrelated findings use the GitHub Issue fallback.
+After mutation, the matching CLI scan runs again; a finding is reported as fixed only when it is absent.
+
+All advertised managers participate in this model: npm, Yarn, pip, Poetry, Maven, Gradle, Go modules, and Composer.
+Gradle automation is intentionally limited to literal dependency coordinates, and pip automation is limited to a
+direct unambiguous `requirements.txt` entry. Unsafe manifest shapes fall back instead of being guessed.
 
 ### Fixability And Ecosystem Mapping
 
@@ -208,7 +228,7 @@ The engine is configured entirely through environment variables loaded by [`scri
 | `SEVERITY_THRESHOLD` | `high` | One of `critical`, `high`, `medium`, `low` |
 | `PACKAGE_MANAGERS` | auto-detect | Restrict remediation to specific managers |
 | `DRY_RUN` | `false` | Skip git pushes, PR creation, and issue mutation |
-| `MAX_PRS_PER_RUN` | `5` | Used as an issue-processing cap, not a true PR fan-out limit |
+| `MAX_PRS_PER_RUN` | `5` | Compatibility setting; the engine currently creates at most one PR per target branch |
 | `MAX_ISSUES_PER_RUN` | `10` | Limit fallback issue processing |
 | `WORKING_DIRECTORY` | `.` | Repository directory to inspect and mutate |
 | `ENABLE_COPILOT_AGENT_FALLBACK` | `true` | Enable GitHub Issue creation for unfixable findings |

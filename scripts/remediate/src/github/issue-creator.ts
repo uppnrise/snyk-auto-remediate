@@ -21,6 +21,7 @@ function severityColor(severity: Severity): string {
     high: '🟠',
     medium: '🟡',
     low: '🟢',
+    info: '🔵',
   };
   return colors[severity];
 }
@@ -35,19 +36,21 @@ function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
   const cwes = problems.filter((p) => p.type === 'cwe').map((p) => p.id);
   const cvssScore = problems.find((p) => p.cvss_score != null)?.cvss_score;
 
-  const affectedPackages = attrs.coordinates
-    .flatMap((c) => c.representations ?? [])
-    .filter((r) => r.dependency)
-    .map((r) => `\`${r.dependency!.package_name}@${r.dependency!.package_version}\``)
-    .join(', ') || 'Unknown';
+  const affectedPackages =
+    (attrs.coordinates ?? [])
+      .flatMap((c) => c.representations ?? [])
+      .filter((r) => r.dependency)
+      .map((r) => `\`${r.dependency!.package_name}@${r.dependency!.package_version}\``)
+      .join(', ') || 'Unknown';
 
-  const remedyDescription = attrs.coordinates
-    .flatMap((c) => c.remedies ?? [])
-    .map((r) => r.description)
-    .filter(Boolean)
-    .join('\n') || 'No automated remedy available. Manual investigation required.';
+  const remedyDescription =
+    (attrs.coordinates ?? [])
+      .flatMap((c) => c.remedies ?? [])
+      .map((r) => r.description)
+      .filter(Boolean)
+      .join('\n') || 'No automated remedy available. Manual investigation required.';
 
-  const snykUrl = problems.find((p) => p.url)?.url ?? `https://security.snyk.io/vuln/${issue.id}`;
+  const snykUrl = problems.find((p) => p.url)?.url ?? `https://security.snyk.io/vuln/${attrs.key}`;
 
   return `${marker}
 
@@ -61,7 +64,7 @@ function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
 
 | Field | Value |
 |-------|-------|
-| **Snyk ID** | [\`${issue.id}\`](${snykUrl}) |
+| **Snyk ID** | [\`${attrs.key}\`](${snykUrl}) |
 | **Severity** | ${severityColor(severity)} ${severity.toUpperCase()} |
 | **CVSS Score** | ${cvssScore != null ? cvssScore.toFixed(1) : 'N/A'} |
 | **CVE(s)** | ${cves.length > 0 ? cves.join(', ') : 'N/A'} |
@@ -131,11 +134,18 @@ export async function createOrUpdateIssues(
     logger.info('No unfixable issues to create GitHub issues for');
     return 0;
   }
+  if (config.dryRun) {
+    const count = Math.min(unfixableIssues.length, config.maxIssuesPerRun);
+    for (const issue of unfixableIssues.slice(0, count)) {
+      logger.info(`[dry-run] Would create or update fallback issue for ${issue.attributes.key}`);
+    }
+    return count;
+  }
 
   const client = new GitHubApiClient(config.githubToken, config.githubRepository);
 
   // Ensure required labels exist
-  await ensureLabels(client, config);
+  await ensureLabels(client);
 
   // Fetch existing open issues to check for duplicates
   logger.info('Fetching existing open issues to check for duplicates...');
@@ -156,10 +166,7 @@ export async function createOrUpdateIssues(
 
   for (const issue of issuesToProcess) {
     const severity = issue.attributes.effective_severity_level;
-    const labels = [
-      ...config.issueLabels,
-      `severity/${severity}`,
-    ];
+    const labels = [...config.issueLabels, `severity/${severity}`];
 
     const title = `[Snyk] ${issue.attributes.title}`;
     const body = buildIssueBody(issue, config);
@@ -194,10 +201,7 @@ export async function createOrUpdateIssues(
   return createdCount;
 }
 
-async function ensureLabels(
-  client: GitHubApiClient,
-  config: RemediationConfig,
-): Promise<void> {
+async function ensureLabels(client: GitHubApiClient): Promise<void> {
   const labelDefs: Array<{ name: string; color: string; description: string }> = [
     { name: 'security', color: 'ee0701', description: 'Security vulnerability' },
     { name: 'snyk', color: '4c1a7e', description: 'Snyk security finding' },
@@ -206,6 +210,7 @@ async function ensureLabels(
     { name: 'severity/high', color: 'e4e669', description: 'High severity' },
     { name: 'severity/medium', color: 'fbca04', description: 'Medium severity' },
     { name: 'severity/low', color: '0e8a16', description: 'Low severity' },
+    { name: 'severity/info', color: '1d76db', description: 'Informational severity' },
   ];
 
   for (const label of labelDefs) {

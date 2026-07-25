@@ -1,79 +1,47 @@
 import { execCommand } from '../utils/exec.js';
 import { logger } from '../utils/logger.js';
-import type { PackageManager, SnykIssue } from './types.js';
+import type { DetectedEcosystem } from './types.js';
+import { normalizeCliOutput } from './correlation.js';
 
-export interface SnykTestResult {
-  vulnerabilities: SnykCliVulnerability[];
-  packageManager: string;
-  projectName: string;
-  ok: boolean;
-}
+const CLI_PACKAGE_MANAGER: Record<DetectedEcosystem['packageManager'], string> = {
+  npm: 'npm',
+  yarn: 'yarn',
+  pip: 'pip',
+  poetry: 'poetry',
+  maven: 'maven',
+  gradle: 'gradle',
+  go: 'gomodules',
+  composer: 'composer',
+};
 
-export interface SnykCliVulnerability {
-  id: string;
-  title: string;
-  severity: string;
-  packageName: string;
-  version: string;
-  fixedIn?: string[];
-  upgradePath?: string[];
-  isUpgradable?: boolean;
-  isPatchable?: boolean;
-}
-
-export async function runSnykTest(
-  workingDirectory: string,
-  packageManager: PackageManager,
+export async function scanWithSnykCli(
+  ecosystem: DetectedEcosystem,
   snykToken: string,
-): Promise<SnykTestResult | null> {
-  const env = { ...process.env, SNYK_TOKEN: snykToken };
-
+): Promise<ReturnType<typeof normalizeCliOutput>> {
+  const env = { ...process.env, SNYK_TOKEN: snykToken } as Record<string, string>;
+  const args = [
+    'test',
+    '--json',
+    `--package-manager=${CLI_PACKAGE_MANAGER[ecosystem.packageManager]}`,
+  ];
+  let stdout: string;
   try {
-    const result = await execCommand(
-      'snyk',
-      ['test', '--json', `--package-manager=${packageManager}`],
-      { cwd: workingDirectory, env: env as Record<string, string> },
-    );
-
-    const parsed = JSON.parse(result.stdout) as SnykTestResult;
-    return parsed;
+    stdout = (await execCommand('snyk', args, { cwd: ecosystem.workingDirectory, env })).stdout;
   } catch (error) {
-    // snyk test exits with non-zero if vulnerabilities found — parse JSON anyway
-    if (error instanceof Error && 'stdout' in error) {
-      try {
-        const parsed = JSON.parse((error as { stdout: string }).stdout) as SnykTestResult;
-        return parsed;
-      } catch {
-        logger.warn(`Could not parse snyk test output: ${error.message}`);
-      }
+    if (
+      !(error instanceof Error) ||
+      !('stdout' in error) ||
+      typeof (error as { stdout?: unknown }).stdout !== 'string'
+    ) {
+      throw error;
     }
-    return null;
+    stdout = (error as Error & { stdout: string }).stdout;
   }
-}
-
-export function isFixableBySnykCli(issue: SnykIssue): boolean {
-  return issue.attributes.coordinates.some(
-    (coord) =>
-      coord.is_fixable_snyk === true ||
-      coord.is_fixable_upstream === true ||
-      coord.is_patchable === true,
-  );
-}
-
-export function extractPackageInfo(
-  issue: SnykIssue,
-): { packageName: string; currentVersion: string; targetVersion?: string } | null {
-  for (const coord of issue.attributes.coordinates) {
-    const dep = coord.representations?.[0]?.dependency;
-    if (dep) {
-      const remedy = coord.remedies?.[0];
-      const targetVersion = remedy?.details?.target_version;
-      return {
-        packageName: dep.package_name,
-        currentVersion: dep.package_version,
-        ...(targetVersion !== undefined ? { targetVersion } : {}),
-      };
-    }
+  try {
+    return normalizeCliOutput(JSON.parse(stdout) as unknown, ecosystem);
+  } catch (error) {
+    const message = `Could not parse Snyk CLI output for ${ecosystem.packageManager}: ${String(error)}`;
+    logger.error(message);
+    throw new Error(message);
   }
-  return null;
 }

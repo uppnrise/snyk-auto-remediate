@@ -1,52 +1,38 @@
-import type { FixResult, PackageManager, SnykIssue } from '../snyk/types.js';
-import { logger } from '../utils/logger.js';
+import type { FixResult, PackageManager, RemediationAction, SnykIssue } from '../snyk/types.js';
 import { execCommand } from '../utils/exec.js';
 
 export abstract class BaseFixer {
   abstract readonly packageManager: PackageManager;
-
-  abstract canFix(issue: SnykIssue): boolean;
-
   abstract applyFix(
     workingDirectory: string,
-    issues: SnykIssue[],
+    actions: RemediationAction[],
+    findings: Map<string, SnykIssue>,
     dryRun: boolean,
   ): Promise<FixResult>;
+  rollback(): void {}
 
-  protected async runCommand(
-    command: string,
-    args: string[],
-    cwd: string,
-  ): Promise<{ stdout: string; stderr: string }> {
-    logger.debug(`[${this.packageManager}] Running: ${command} ${args.join(' ')}`);
-    const result = await execCommand(command, args, { cwd });
-    return result;
+  protected async runCommand(command: string, args: string[], cwd: string): Promise<void> {
+    await execCommand(command, args, { cwd });
   }
-
-  protected createSuccessResult(
-    fixedFindings: SnykIssue[],
-    changesApplied: string[],
+  protected result(
+    actions: RemediationAction[],
+    findings: Map<string, SnykIssue>,
+    success: boolean,
+    changes: string[],
+    error?: string,
   ): FixResult {
+    const affected = actions
+      .flatMap((a) => a.findingIds)
+      .map((id) => findings.get(id))
+      .filter((x): x is SnykIssue => Boolean(x));
     return {
-      success: true,
+      success,
       packageManager: this.packageManager,
-      fixedFindings,
-      failedFindings: [],
-      changesApplied,
-    };
-  }
-
-  protected createErrorResult(
-    failedFindings: SnykIssue[],
-    error: string,
-  ): FixResult {
-    return {
-      success: false,
-      packageManager: this.packageManager,
-      fixedFindings: [],
-      failedFindings,
-      changesApplied: [],
-      error,
+      fixedFindings: success ? affected : [],
+      failedFindings: success ? [] : affected,
+      changesApplied: changes,
+      attemptedActions: actions,
+      ...(error ? { error } : {}),
     };
   }
 }

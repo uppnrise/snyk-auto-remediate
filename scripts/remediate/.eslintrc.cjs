@@ -9,7 +9,7 @@ module.exports = {
     'plugin:@typescript-eslint/recommended-requiring-type-checking',
   ],
   parserOptions: {
-    project: './tsconfig.json',
+    project: './tsconfig.eslint.json',
     tsconfigRootDir: __dirname,
   },
   rules: {
@@ -18,5 +18,13 @@ module.exports = {
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     'no-console': 'warn',
   },
+  overrides: [
+    {
+      files: ['tests/**/*.ts'],
+      rules: {
+        '@typescript-eslint/unbound-method': 'off',
+      },
+    },
+  ],
   ignorePatterns: ['dist/', 'node_modules/', 'vitest.config.ts'],
 };

@@ -1,7 +1,7 @@
 import { loadConfig } from './utils/config.js';
 import { logger } from './utils/logger.js';
 import { fetchSnykIssues } from './snyk/api-client.js';
-import { deduplicateIssues, partitionByFixability, filterIssuesForPackageManager } from './utils/dedup.js';
+import { deduplicateIssues } from './utils/dedup.js';
 import { detectEcosystems } from './detectors/language-detector.js';
 import { NpmFixer } from './fixers/npm-fixer.js';
 import { YarnFixer } from './fixers/yarn-fixer.js';
@@ -17,9 +17,20 @@ import { createOrUpdatePr, buildPrBody } from './github/pr-creator.js';
 import { writeJsonReport } from './reporting/json-writer.js';
 import { writeSarifReport } from './reporting/sarif-writer.js';
 import { writeStepSummary } from './reporting/summary-writer.js';
-import { gitHasChanges, gitAddAll, gitCommit, gitCheckoutBranch, buildRemediationBranchName, gitConfigureUser, gitBranchExists, gitPush } from './utils/git.js';
+import {
+  gitHasChanges,
+  gitAddAll,
+  gitCommit,
+  gitCheckoutBranch,
+  buildRemediationBranchName,
+  gitConfigureUser,
+  gitBranchExists,
+  gitPush,
+} from './utils/git.js';
 import { runPostFixTests } from './utils/test-runner.js';
 import type { FixResult, RemediationReport } from './snyk/types.js';
+import { scanWithSnykCli } from './snyk/cli-runner.js';
+import { buildRemediationPlan } from './snyk/correlation.js';
 import { resolve } from 'path';
 
 const FIXERS: BaseFixer[] = [
@@ -49,15 +60,30 @@ async function main(): Promise<void> {
   allIssues = deduplicateIssues(allIssues);
   logger.info(`Total unique issues: ${allIssues.length}`);
 
-  // 2. Partition into fixable / unfixable
-  const { fixable, unfixable } = partitionByFixability(allIssues);
-  logger.info(`Fixable: ${fixable.length}, Unfixable: ${unfixable.length}`);
-
-  // 3. Detect ecosystems
+  // 2. Detect ecosystems and obtain exact remediation evidence from local CLI scans.
   const ecosystems = detectEcosystems(workingDir, config.packageManagers);
+  const cliFindings = (
+    await Promise.all(
+      ecosystems.map(async (ecosystem) => {
+        try {
+          return await scanWithSnykCli(ecosystem, config.snykToken);
+        } catch (error) {
+          errors.push(`Snyk CLI scan failed for ${ecosystem.packageManager}: ${String(error)}`);
+          return [];
+        }
+      }),
+    )
+  ).flat();
+  const plan = buildRemediationPlan(allIssues, cliFindings);
+  const runtimeNonActionable = [...plan.nonActionable];
+  const findingsById = new Map(allIssues.map((issue) => [issue.id, issue]));
+  const actionableIds = new Set(plan.actions.flatMap((action) => action.findingIds));
+  const fixable = allIssues.filter((issue) => actionableIds.has(issue.id));
+  const unfixable = plan.nonActionable.map((item) => item.issue);
+  logger.info(`Actionable: ${fixable.length}, fallback: ${unfixable.length}`);
 
-  // 4. Run fixers per detected ecosystem
-  if (fixable.length > 0 && ecosystems.length > 0) {
+  // 3. Apply and verify exact actions per ecosystem.
+  if (plan.actions.length > 0 && ecosystems.length > 0) {
     // Configure git user for commits
     if (!config.dryRun) {
       await gitConfigureUser(workingDir);
@@ -83,18 +109,59 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const relevantIssues = filterIssuesForPackageManager(fixable, ecosystem.packageManager).slice(
-        0,
-        config.maxPrsPerRun * 10,
+      const relevantActions = plan.actions.filter(
+        (action) => action.packageManager === ecosystem.packageManager,
       );
-      if (relevantIssues.length === 0) {
+      if (relevantActions.length === 0) {
         logger.info(`No ${ecosystem.packageManager} issues to fix, skipping`);
         continue;
       }
-      logger.info(`Running ${ecosystem.packageManager} fixer on ${relevantIssues.length} issues...`);
+      logger.info(
+        `Running ${ecosystem.packageManager} fixer on ${relevantActions.length} exact actions...`,
+      );
 
-      const result = await fixer.applyFix(workingDir, relevantIssues, config.dryRun);
+      const result = await fixer.applyFix(workingDir, relevantActions, findingsById, config.dryRun);
+      if (result.success && !config.dryRun) {
+        try {
+          const after = await scanWithSnykCli(ecosystem, config.snykToken);
+          const remainingKeys = new Set(after.map((finding) => finding.issueKey));
+          const unverified = relevantActions
+            .flatMap((action) => action.findingKeys)
+            .filter((key) => remainingKeys.has(key));
+          if (unverified.length > 0) {
+            fixer.rollback();
+            result.success = false;
+            result.error = `verification_failed: ${unverified.join(', ')}`;
+            result.failedFindings = result.fixedFindings;
+            result.fixedFindings = [];
+            result.changesApplied = [];
+          } else {
+            result.verifiedFindingIds = relevantActions.flatMap((action) => action.findingIds);
+          }
+        } catch (error) {
+          fixer.rollback();
+          result.success = false;
+          result.error = `verification_failed: ${String(error)}`;
+          result.failedFindings = result.fixedFindings;
+          result.fixedFindings = [];
+          result.changesApplied = [];
+        }
+      }
       fixResults.push(result);
+      if (!result.success) {
+        const reason = result.error?.startsWith('verification_failed')
+          ? ('verification_failed' as const)
+          : result.error?.includes('unsupported_manifest_shape')
+            ? ('unsupported_manifest_shape' as const)
+            : ('apply_failed' as const);
+        for (const issue of result.failedFindings) {
+          runtimeNonActionable.push({
+            issue,
+            reason,
+            ...(result.error ? { detail: result.error } : {}),
+          });
+        }
+      }
 
       if (result.success && !config.dryRun) {
         const hasChanges = await gitHasChanges(workingDir);
@@ -118,6 +185,11 @@ async function main(): Promise<void> {
           const msg = `Post-fix tests failed; aborting PR creation: ${testResult.error ?? 'unknown error'}`;
           logger.error(msg);
           errors.push(msg);
+          for (const result of fixResults.filter((item) => item.success)) {
+            for (const issue of result.fixedFindings) {
+              runtimeNonActionable.push({ issue, reason: 'tests_failed', detail: msg });
+            }
+          }
         }
       }
 
@@ -151,9 +223,13 @@ async function main(): Promise<void> {
     }
   }
 
-  // 5. Create GitHub Issues for unfixable findings
+  const fallbackIssues = [
+    ...new Map(runtimeNonActionable.map((item) => [item.issue.id, item.issue])).values(),
+  ];
+
+  // 4. Create GitHub Issues for findings without a safe exact action or a verified fix.
   try {
-    issuesCreated = await createOrUpdateIssues(unfixable, config);
+    issuesCreated = await createOrUpdateIssues(fallbackIssues, config);
   } catch (error) {
     const msg = `Failed to create GitHub issues: ${String(error)}`;
     logger.error(msg);
@@ -161,7 +237,9 @@ async function main(): Promise<void> {
   }
 
   // 6. Build report
-  const fixedCount = fixResults.reduce((sum, r) => sum + r.fixedFindings.length, 0);
+  const fixedCount = config.dryRun
+    ? 0
+    : fixResults.reduce((sum, r) => sum + (r.verifiedFindingIds?.length ?? 0), 0);
   const report: RemediationReport = {
     timestamp: new Date().toISOString(),
     repository: config.githubRepository,
@@ -170,12 +248,31 @@ async function main(): Promise<void> {
     totalFindings: allIssues.length,
     fixableFindings: fixable.length,
     fixedFindings: fixedCount,
-    unfixableFindings: unfixable.length,
+    unfixableFindings: fallbackIssues.length,
     dryRun: config.dryRun,
     fixResults,
     issuesCreated,
     prsCreated,
     errors,
+    actionableFindings: fixable.length,
+    ambiguousFindings: plan.nonActionable.filter((x) => x.reason === 'ambiguous_upgrade_path')
+      .length,
+    unsupportedFindings: plan.nonActionable.filter((x) =>
+      ['missing_coordinates', 'unsupported_manifest_shape', 'patch_only'].includes(x.reason),
+    ).length,
+    attemptedFindings: new Set(
+      fixResults.flatMap((r) => r.attemptedActions ?? []).flatMap((a) => a.findingIds),
+    ).size,
+    verifiedFixedFindings: new Set(fixResults.flatMap((r) => r.verifiedFindingIds ?? [])).size,
+    verificationFailedFindings: fixResults.filter((r) => r.error?.startsWith('verification_failed'))
+      .length,
+    fallbackFindings: fallbackIssues.length,
+    nonActionable: runtimeNonActionable.map((x) => ({
+      id: x.issue.id,
+      key: x.issue.attributes.key,
+      reason: x.reason,
+      ...(x.detail ? { detail: x.detail } : {}),
+    })),
   };
 
   // 7. Write reports
@@ -194,7 +291,9 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  logger.info(`✅ Snyk Auto-Remediation complete. Fixed: ${fixedCount}, Issues created: ${issuesCreated}, PRs created: ${prsCreated}`);
+  logger.info(
+    `✅ Snyk Auto-Remediation complete. Fixed: ${fixedCount}, Issues created: ${issuesCreated}, PRs created: ${prsCreated}`,
+  );
   process.exit(0);
 }
 

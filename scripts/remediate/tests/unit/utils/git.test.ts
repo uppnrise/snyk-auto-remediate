@@ -13,7 +13,7 @@ describe('buildRemediationBranchName', () => {
     expect(name).toMatch(/^chore\/security\/snyk-remediation-release-v1-0-\d{8}$/);
   });
 
-  it('should include today\'s date in YYYYMMDD format', () => {
+  it("should include today's date in YYYYMMDD format", () => {
     const name = buildRemediationBranchName('main');
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     expect(name).toContain(today);

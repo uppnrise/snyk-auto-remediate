@@ -20,7 +20,7 @@ on:
         type: boolean
         default: false
       max-prs-per-run:
-        description: 'Maximum number of PRs to open per run'
+        description: 'Compatibility limit; the engine creates at most one PR per target branch'
         type: number
         default: 5
       max-issues-per-run:
