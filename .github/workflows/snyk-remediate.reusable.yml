@@ -202,9 +202,14 @@ jobs:
         run: npm install -g snyk
 
       - name: Authenticate Snyk
-        run: snyk auth "$SNYK_TOKEN"
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        run: |
+          if [ -z "$SNYK_TOKEN" ]; then
+            echo "::error::SNYK_TOKEN is required; configure it as a repository or organization Actions secret"
+            exit 1
+          fi
+          snyk auth "$SNYK_TOKEN"
 
       # ── Remediation engine dependencies ────────────────────────────────────
       - name: Install remediation engine dependencies
