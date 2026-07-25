@@ -23,12 +23,8 @@ function makeIssue(id: string, fixable: boolean): SnykIssue {
           is_fixable_upstream: fixable,
           is_patchable: false,
           is_pinnable: false,
-          remedies: fixable
-            ? [{ type: 'upgrade', description: 'Upgrade to safe version' }]
-            : [],
-          representations: [
-            { dependency: { package_name: 'test-pkg', package_version: '1.0.0' } },
-          ],
+          remedies: fixable ? [{ type: 'upgrade', description: 'Upgrade to safe version' }] : [],
+          representations: [{ dependency: { package_name: 'test-pkg', package_version: '1.0.0' } }],
         },
       ],
     },

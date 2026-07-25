@@ -97,7 +97,7 @@ export class GitHubApiClient {
     const allIssues: GitHubIssue[] = [];
     let page = 1;
 
-    while (true) {
+    for (;;) {
       const url = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/issues?state=${state}&per_page=100&page=${page}`;
       const response = await githubFetchWithRetry(url, { headers: this.headers });
 

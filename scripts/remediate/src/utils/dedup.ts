@@ -23,7 +23,7 @@ export function partitionByFixability(issues: SnykIssue[]): {
   const unfixable: SnykIssue[] = [];
 
   for (const issue of issues) {
-    const canFix = issue.attributes.coordinates.some(
+    const canFix = (issue.attributes.coordinates ?? []).some(
       (coord) =>
         coord.is_fixable_snyk === true ||
         coord.is_fixable_upstream === true ||
@@ -87,12 +87,27 @@ export function inferIssueEcosystem(issue: SnykIssue): string | undefined {
   }
 
   // 2. Fall back to resourcePath heuristics.
-  for (const coord of issue.attributes.coordinates) {
+  for (const coord of issue.attributes.coordinates ?? []) {
     const path = coord.representations?.[0]?.resourcePath?.toLowerCase();
     if (!path) continue;
-    if (path.endsWith('package.json') || path.endsWith('package-lock.json') || path.endsWith('yarn.lock')) return 'js';
-    if (path.endsWith('requirements.txt') || path.endsWith('pyproject.toml') || path.endsWith('poetry.lock')) return 'python';
-    if (path.endsWith('pom.xml') || path.endsWith('build.gradle') || path.endsWith('build.gradle.kts')) return 'java';
+    if (
+      path.endsWith('package.json') ||
+      path.endsWith('package-lock.json') ||
+      path.endsWith('yarn.lock')
+    )
+      return 'js';
+    if (
+      path.endsWith('requirements.txt') ||
+      path.endsWith('pyproject.toml') ||
+      path.endsWith('poetry.lock')
+    )
+      return 'python';
+    if (
+      path.endsWith('pom.xml') ||
+      path.endsWith('build.gradle') ||
+      path.endsWith('build.gradle.kts')
+    )
+      return 'java';
     if (path.endsWith('go.mod') || path.endsWith('go.sum')) return 'go';
     if (path.endsWith('composer.json') || path.endsWith('composer.lock')) return 'php';
   }
