@@ -87,6 +87,8 @@ export interface SnykApiResponse {
 }
 export interface CliVulnerability {
   issueKey: string;
+  title?: string;
+  severity?: Severity;
   packageName: string;
   version: string;
   packageManager: PackageManager;
