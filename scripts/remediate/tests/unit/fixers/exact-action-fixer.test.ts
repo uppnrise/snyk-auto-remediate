@@ -76,4 +76,27 @@ describe('exact action fixers', () => {
     const result = await new NpmFixer().applyFix('.', [action], new Map([[issue.id, issue]]), true);
     expect(result.attemptedActions).toEqual([]);
   });
+
+  it('treats an irrelevant non-dry-run action list as a successful no-op', async () => {
+    const action: RemediationAction = {
+      packageManager: 'yarn',
+      packageName: 'lodash',
+      currentVersion: '1.0.0',
+      targetVersion: '1.2.3',
+      findingIds: [issue.id],
+      findingKeys: [issue.attributes.key],
+      evidence: 'snyk-cli-upgrade-path',
+    };
+
+    const result = await new NpmFixer().applyFix(
+      '/path/that/does/not/exist',
+      [action],
+      new Map([[issue.id, issue]]),
+      false,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.attemptedActions).toEqual([]);
+    expect(result.changesApplied).toEqual([]);
+  });
 });

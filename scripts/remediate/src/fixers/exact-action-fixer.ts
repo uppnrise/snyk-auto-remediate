@@ -121,6 +121,7 @@ export class ExactActionFixer extends BaseFixer {
     const changes = relevant.map(
       (a) => `${a.packageName}: ${a.currentVersion} -> ${a.targetVersion}`,
     );
+    if (relevant.length === 0) return this.result([], findings, true, []);
     if (dryRun)
       return this.result(
         relevant,

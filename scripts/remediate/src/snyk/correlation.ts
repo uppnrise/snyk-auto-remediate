@@ -22,13 +22,25 @@ interface RawCliResult {
   projectName?: unknown;
   projectId?: unknown;
 }
-const exactVersion = /^v?(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$/;
+function normalizeExactVersion(value: string): string | undefined {
+  const version = /^v\d/.test(value) ? value.slice(1) : value;
+  if (
+    version.length === 0 ||
+    !/^\d[0-9A-Za-z._+~-]*$/.test(version) ||
+    /(?:^|[._-])[xX](?:$|[._-])/.test(version) ||
+    version.includes('*')
+  ) {
+    return undefined;
+  }
+  return version;
+}
+
 function parseCoordinate(value: string): { name: string; version: string } | undefined {
   const at = value.lastIndexOf('@');
   if (at <= 0) return undefined;
   const name = value.slice(0, at);
-  const match = exactVersion.exec(value.slice(at + 1));
-  return match?.[1] ? { name, version: match[1] } : undefined;
+  const version = normalizeExactVersion(value.slice(at + 1));
+  return version ? { name, version } : undefined;
 }
 
 export function normalizeCliOutput(raw: unknown, ecosystem: DetectedEcosystem): CliVulnerability[] {
@@ -143,4 +155,24 @@ export function buildRemediationPlan(
     }
   }
   return { actions: [...merged.values()], nonActionable };
+}
+
+export function unresolvedFindingKeys(
+  actions: RemediationAction[],
+  remainingFindings: CliVulnerability[],
+): string[] {
+  const unresolved = new Set<string>();
+  for (const action of actions) {
+    for (const findingKey of action.findingKeys) {
+      const keyMatches = remainingFindings.filter((finding) => finding.issueKey === findingKey);
+      const cliHasProjectIds =
+        keyMatches.length > 0 && keyMatches.every((finding) => finding.projectId !== undefined);
+      const remains =
+        cliHasProjectIds && action.projectId !== undefined
+          ? keyMatches.some((finding) => finding.projectId === action.projectId)
+          : keyMatches.length > 0;
+      if (remains) unresolved.add(findingKey);
+    }
+  }
+  return [...unresolved];
 }
