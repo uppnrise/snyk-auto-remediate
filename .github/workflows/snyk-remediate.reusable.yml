@@ -104,12 +104,31 @@ permissions:
   security-events: write
 
 jobs:
+  prepare:
+    name: Prepare target branches
+    runs-on: ubuntu-latest
+    outputs:
+      branches: ${{ steps.branches.outputs.json }}
+    steps:
+      - name: Build branch matrix
+        id: branches
+        env:
+          TARGET_BRANCHES: ${{ inputs['target-branches'] }}
+        run: |
+          branches="$(jq -R -c 'split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))' <<< "$TARGET_BRANCHES")"
+          if [ "$branches" = "[]" ]; then
+            echo "::error::target-branches must contain at least one branch"
+            exit 1
+          fi
+          echo "json=$branches" >> "$GITHUB_OUTPUT"
+
   remediate:
     name: Snyk Remediation (${{ matrix.branch }})
+    needs: prepare
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        branch: ${{ fromJson(format('["{0}"]', replace(replace(inputs['target-branches'], ' ', ''), ',', '","'))) }}
+        branch: ${{ fromJson(needs.prepare.outputs.branches) }}
       fail-fast: false
 
     steps:
