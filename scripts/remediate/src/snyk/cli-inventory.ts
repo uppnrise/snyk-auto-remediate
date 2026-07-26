@@ -82,6 +82,12 @@ export async function loadIssueInventory(
   cliFindings: CliVulnerability[],
   restFetcher: (config: RemediationConfig) => Promise<SnykIssue[]> = fetchSnykIssues,
 ): Promise<SnykIssue[]> {
+  if (!config.snykProjectIds?.length) {
+    logger.info(
+      'No SNYK_PROJECT_IDS configured; using repository-local CLI inventory to avoid organization-wide cross-repository findings',
+    );
+    return buildCliInventory(cliFindings, config.snykOrgId, config.severityThreshold);
+  }
   try {
     return await restFetcher(config);
   } catch (error) {

@@ -22,6 +22,9 @@ const sampleReport: RemediationReport = {
     },
   ],
   issuesCreated: 2,
+  issuesPlanned: 0,
+  issuesUpdated: 0,
+  issuesClosed: 0,
   prsCreated: 1,
   errors: [],
 };
@@ -53,9 +56,16 @@ describe('buildMarkdownSummary', () => {
   });
 
   it('should show dry run status when enabled', () => {
-    const dryRunReport = { ...sampleReport, dryRun: true };
+    const dryRunReport = {
+      ...sampleReport,
+      dryRun: true,
+      issuesCreated: 0,
+      issuesPlanned: 2,
+    };
     const summary = buildMarkdownSummary(dryRunReport);
     expect(summary).toContain('Yes');
+    expect(summary).toContain('GitHub Issues Planned');
+    expect(summary).toContain('| GitHub Issues Created | 0 |');
   });
 
   it('should include errors section when errors exist', () => {

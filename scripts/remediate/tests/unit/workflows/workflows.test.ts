@@ -86,4 +86,13 @@ describe('GitHub Actions workflows', () => {
     expect(ci).toContain('npm test -- --run');
     expect(ci).toContain('npm run build');
   });
+
+  it('pins the Snyk CLI and serializes remediation for the same target branch', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    expect(reusable).toContain('npm install -g snyk@1.1306.1');
+    expect(reusable).toContain('concurrency:');
+    expect(reusable).toContain('cancel-in-progress: false');
+    expect(reusable).not.toContain('max-prs-per-run');
+    expect(workflow('snyk-remediate.yml')).not.toContain('max-prs-per-run');
+  });
 });

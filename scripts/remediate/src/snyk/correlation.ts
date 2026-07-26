@@ -116,20 +116,29 @@ function actionFrom(issue: SnykIssue, cli: CliVulnerability): RemediationAction 
 export function buildRemediationPlan(
   issues: SnykIssue[],
   cliVulnerabilities: CliVulnerability[],
+  options: { scopedProjectIds?: string[] } = {},
 ): { actions: RemediationAction[]; nonActionable: NonActionableFinding[] } {
   const actions: RemediationAction[] = [];
   const nonActionable: NonActionableFinding[] = [];
   for (const issue of issues) {
     const projectId = issue.relationships.scan_item.data.id;
-    const matches = cliVulnerabilities.filter(
-      (v) =>
-        v.issueKey === issue.attributes.key &&
-        (v.projectId === undefined || v.projectId === projectId),
-    );
+    const keyMatches = cliVulnerabilities.filter((v) => v.issueKey === issue.attributes.key);
+    const matches = keyMatches.filter((v) => {
+      if (v.projectId !== undefined) return v.projectId === projectId;
+      if (options.scopedProjectIds?.length === 1) {
+        return options.scopedProjectIds[0] === projectId;
+      }
+      return v.projectName === projectId;
+    });
     if (matches.length === 0) {
       nonActionable.push({
         issue,
-        reason: issue.attributes.coordinates?.length ? 'cli_not_correlated' : 'missing_coordinates',
+        reason:
+          keyMatches.length > 0
+            ? 'project_not_correlated'
+            : issue.attributes.coordinates?.length
+              ? 'cli_not_correlated'
+              : 'missing_coordinates',
       });
       continue;
     }
@@ -154,7 +163,7 @@ export function buildRemediationPlan(
   }
   const merged = new Map<string, RemediationAction>();
   for (const action of actions) {
-    const key = `${action.packageManager}:${action.packageName}`;
+    const key = `${action.projectId}:${action.packageManager}:${action.packageName}`;
     const prior = merged.get(key);
     if (!prior) merged.set(key, action);
     else {

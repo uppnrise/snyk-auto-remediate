@@ -64,8 +64,8 @@ describe('Snyk REST contract', () => {
 
     expect(issues).toHaveLength(1);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0].toString()).toContain('scan_item.id=project-a');
-    expect(fetchMock.mock.calls[1]?.[0].toString()).toContain('scan_item.id=project-b');
+    expect(fetchMock.mock.calls[0]?.[0]).toEqual(expect.stringContaining('scan_item.id=project-a'));
+    expect(fetchMock.mock.calls[1]?.[0]).toEqual(expect.stringContaining('scan_item.id=project-b'));
   });
 
   it('refuses to forward authentication to an untrusted pagination origin', async () => {

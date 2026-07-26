@@ -134,6 +134,98 @@ export class GitHubApiClient {
       logger.warn(`Could not create label "${name}": ${createResponse.status}`);
     }
   }
+
+  async listPulls(head: string, base: string): Promise<GitHubPullRequest[]> {
+    const params = new URLSearchParams({
+      head: `${this.owner}:${head}`,
+      base,
+      state: 'open',
+      per_page: '100',
+    });
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/pulls?${params.toString()}`,
+      { headers: this.headers },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `GitHub API error listing pull requests: ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as GitHubPullRequest[];
+  }
+
+  async createPull(params: CreatePullParams): Promise<GitHubPullRequest> {
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/pulls`,
+      {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify(params),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `GitHub API error creating pull request: ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as GitHubPullRequest;
+  }
+
+  async updatePull(
+    pullNumber: number,
+    params: Pick<CreatePullParams, 'title' | 'body' | 'base'>,
+  ): Promise<GitHubPullRequest> {
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/pulls/${pullNumber}`,
+      {
+        method: 'PATCH',
+        headers: this.headers,
+        body: JSON.stringify(params),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `GitHub API error updating pull request: ${response.status} ${await response.text()}`,
+      );
+    }
+    return (await response.json()) as GitHubPullRequest;
+  }
+
+  async addLabels(issueNumber: number, labels: string[]): Promise<void> {
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/issues/${issueNumber}/labels`,
+      {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ labels }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `GitHub API error adding labels: ${response.status} ${await response.text()}`,
+      );
+    }
+  }
+
+  async requestReviewers(
+    pullNumber: number,
+    reviewers: string[],
+    teamReviewers: string[],
+  ): Promise<void> {
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/pulls/${pullNumber}/requested_reviewers`,
+      {
+        method: 'POST',
+        headers: this.headers,
+        body: JSON.stringify({ reviewers, team_reviewers: teamReviewers }),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `GitHub API error requesting reviewers: ${response.status} ${await response.text()}`,
+      );
+    }
+  }
 }
 
 export interface CreateIssueParams {
@@ -161,4 +253,19 @@ export interface GitHubIssue {
   labels: Array<{ name: string }>;
   assignees: Array<{ login: string }>;
   pull_request?: Record<string, unknown>;
+}
+
+export interface CreatePullParams {
+  title: string;
+  body: string;
+  head: string;
+  base: string;
+  draft: boolean;
+}
+
+export interface GitHubPullRequest {
+  number: number;
+  html_url: string;
+  title: string;
+  body?: string | null;
 }
