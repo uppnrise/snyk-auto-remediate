@@ -15,6 +15,29 @@ function extractFindingId(body: string): string | null {
   return match?.[1] ?? null;
 }
 
+interface ExistingManagedIssue {
+  number: number;
+  body: string | null;
+  state: string;
+}
+
+export function buildIssueReconciliation(
+  currentIssues: SnykIssue[],
+  existingIssues: ExistingManagedIssue[],
+): { existingByFindingId: Map<string, number>; toClose: number[] } {
+  const activeIds = new Set(currentIssues.map((issue) => issue.id));
+  const existingByFindingId = new Map<string, number>();
+  const toClose: number[] = [];
+  for (const existing of existingIssues) {
+    if (!existing.body) continue;
+    const findingId = extractFindingId(existing.body);
+    if (!findingId) continue;
+    existingByFindingId.set(findingId, existing.number);
+    if (existing.state === 'open' && !activeIds.has(findingId)) toClose.push(existing.number);
+  }
+  return { existingByFindingId, toClose };
+}
+
 function severityColor(severity: Severity): string {
   const colors: Record<Severity, string> = {
     critical: '🔴',
@@ -51,6 +74,12 @@ function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
       .join('\n') || 'No automated remedy available. Manual investigation required.';
 
   const snykUrl = problems.find((p) => p.url)?.url ?? `https://security.snyk.io/vuln/${attrs.key}`;
+
+  const rawFinding = JSON.stringify({ id: issue.id, attributes: attrs }, null, 2);
+  const boundedRawFinding =
+    rawFinding.length > 20_000
+      ? `${rawFinding.slice(0, 20_000)}\n... truncated by snyk-auto-remediate`
+      : rawFinding;
 
   return `${marker}
 
@@ -115,7 +144,7 @@ Please investigate and fix this security vulnerability. Here is what you need to
 <summary>Raw Snyk Finding Data</summary>
 
 \`\`\`json
-${JSON.stringify({ id: issue.id, attributes: attrs }, null, 2)}
+${boundedRawFinding}
 \`\`\`
 
 </details>`;
@@ -124,44 +153,39 @@ ${JSON.stringify({ id: issue.id, attributes: attrs }, null, 2)}
 export async function createOrUpdateIssues(
   unfixableIssues: SnykIssue[],
   config: RemediationConfig,
-): Promise<number> {
+): Promise<{ created: number; updated: number; closed: number; planned: number }> {
+  const summary = { created: 0, updated: 0, closed: 0, planned: 0 };
   if (!config.enableCopilotAgentFallback) {
     logger.info('Copilot agent fallback disabled — skipping issue creation');
-    return 0;
+    return summary;
   }
 
-  if (unfixableIssues.length === 0) {
-    logger.info('No unfixable issues to create GitHub issues for');
-    return 0;
-  }
   if (config.dryRun) {
     const count = Math.min(unfixableIssues.length, config.maxIssuesPerRun);
     for (const issue of unfixableIssues.slice(0, count)) {
       logger.info(`[dry-run] Would create or update fallback issue for ${issue.attributes.key}`);
     }
-    return count;
+    summary.planned = count;
+    return summary;
   }
 
+  if (!config.githubToken) throw new Error('GITHUB_TOKEN is required to reconcile fallback issues');
   const client = new GitHubApiClient(config.githubToken, config.githubRepository);
 
   // Ensure required labels exist
-  await ensureLabels(client);
+  await ensureLabels(client, config.issueLabels);
 
   // Fetch existing open issues to check for duplicates
   logger.info('Fetching existing open issues to check for duplicates...');
   const existingIssues = await client.listIssues('open');
 
-  // Build a map of finding ID -> existing issue number
-  const existingMap = new Map<string, number>();
-  for (const existing of existingIssues) {
-    if (!existing.body) continue;
-    const foundId = extractFindingId(existing.body);
-    if (foundId) {
-      existingMap.set(foundId, existing.number);
-    }
+  const reconciliation = buildIssueReconciliation(unfixableIssues, existingIssues);
+  for (const issueNumber of reconciliation.toClose) {
+    await client.updateIssue(issueNumber, { state: 'closed' });
+    logger.info(`Closed resolved fallback issue #${issueNumber}`);
+    summary.closed++;
   }
 
-  let createdCount = 0;
   const issuesToProcess = unfixableIssues.slice(0, config.maxIssuesPerRun);
 
   for (const issue of issuesToProcess) {
@@ -171,37 +195,37 @@ export async function createOrUpdateIssues(
     const title = `[Snyk] ${issue.attributes.title}`;
     const body = buildIssueBody(issue, config);
 
-    const existingIssueNumber = existingMap.get(issue.id);
+    const existingIssueNumber = reconciliation.existingByFindingId.get(issue.id);
 
     if (existingIssueNumber !== undefined) {
       logger.info(`Updating existing issue #${existingIssueNumber} for finding ${issue.id}`);
-      if (!config.dryRun) {
-        await client.updateIssue(existingIssueNumber, { title, body, labels });
-      } else {
-        logger.info(`[dry-run] Would update issue #${existingIssueNumber}`);
-      }
+      await client.updateIssue(existingIssueNumber, { title, body, labels });
+      summary.updated++;
     } else {
       logger.info(`Creating new issue for finding ${issue.id}: ${title}`);
-      if (!config.dryRun) {
-        const created = await client.createIssue({
+      let created;
+      try {
+        created = await client.createIssue({
           title,
           body,
           labels,
           assignees: [config.copilotAssignee],
         });
-        logger.info(`Created issue #${created.number}: ${created.html_url}`);
-        createdCount++;
-      } else {
-        logger.info(`[dry-run] Would create issue: ${title}`);
-        createdCount++;
+      } catch (error) {
+        logger.warn(
+          `Could not assign fallback issue to @${config.copilotAssignee}; creating it unassigned: ${String(error)}`,
+        );
+        created = await client.createIssue({ title, body, labels });
       }
+      logger.info(`Created issue #${created.number}: ${created.html_url}`);
+      summary.created++;
     }
   }
 
-  return createdCount;
+  return summary;
 }
 
-async function ensureLabels(client: GitHubApiClient): Promise<void> {
+async function ensureLabels(client: GitHubApiClient, configuredLabels: string[]): Promise<void> {
   const labelDefs: Array<{ name: string; color: string; description: string }> = [
     { name: 'security', color: 'ee0701', description: 'Security vulnerability' },
     { name: 'snyk', color: '4c1a7e', description: 'Snyk security finding' },
@@ -212,6 +236,12 @@ async function ensureLabels(client: GitHubApiClient): Promise<void> {
     { name: 'severity/low', color: '0e8a16', description: 'Low severity' },
     { name: 'severity/info', color: '1d76db', description: 'Informational severity' },
   ];
+  const knownNames = new Set(labelDefs.map((label) => label.name));
+  for (const name of configuredLabels) {
+    if (!knownNames.has(name)) {
+      labelDefs.push({ name, color: '6f42c1', description: 'Snyk remediation workflow label' });
+    }
+  }
 
   for (const label of labelDefs) {
     try {

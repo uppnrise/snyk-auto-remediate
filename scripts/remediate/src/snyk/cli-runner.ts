@@ -6,6 +6,7 @@ import { normalizeCliOutput } from './correlation.js';
 const CLI_PACKAGE_MANAGER: Record<DetectedEcosystem['packageManager'], string> = {
   npm: 'npm',
   yarn: 'yarn',
+  pnpm: 'pnpm',
   pip: 'pip',
   poetry: 'poetry',
   maven: 'maven',
@@ -17,6 +18,7 @@ const CLI_PACKAGE_MANAGER: Record<DetectedEcosystem['packageManager'], string> =
 export async function scanWithSnykCli(
   ecosystem: DetectedEcosystem,
   snykToken: string,
+  snykOrgId?: string,
 ): Promise<ReturnType<typeof normalizeCliOutput>> {
   const env = { ...process.env, SNYK_TOKEN: snykToken } as Record<string, string>;
   const args = [
@@ -24,6 +26,7 @@ export async function scanWithSnykCli(
     '--json',
     `--package-manager=${CLI_PACKAGE_MANAGER[ecosystem.packageManager]}`,
   ];
+  if (snykOrgId && snykOrgId !== 'local-cli') args.push(`--org=${snykOrgId}`);
   let stdout: string;
   try {
     stdout = (await execCommand('snyk', args, { cwd: ecosystem.workingDirectory, env })).stdout;
@@ -42,6 +45,6 @@ export async function scanWithSnykCli(
   } catch (error) {
     const message = `Could not parse Snyk CLI output for ${ecosystem.packageManager}: ${String(error)}`;
     logger.error(message);
-    throw new Error(message);
+    throw new Error(message, { cause: error });
   }
 }

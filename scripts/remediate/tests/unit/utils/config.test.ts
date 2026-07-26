@@ -33,7 +33,6 @@ describe('loadConfig', () => {
     const config = loadConfig();
     expect(config.severityThreshold).toBe('high');
     expect(config.dryRun).toBe(false);
-    expect(config.maxPrsPerRun).toBe(5);
     expect(config.maxIssuesPerRun).toBe(10);
     expect(config.enableCopilotAgentFallback).toBe(true);
     expect(config.copilotAssignee).toBe('copilot');
@@ -61,11 +60,10 @@ describe('loadConfig', () => {
     expect(config.severityThreshold).toBe('critical');
   });
 
-  it('should default to high for invalid severity', () => {
+  it('should reject an invalid severity', () => {
     setRequiredEnv();
     process.env['SEVERITY_THRESHOLD'] = 'invalid';
-    const config = loadConfig();
-    expect(config.severityThreshold).toBe('high');
+    expect(() => loadConfig()).toThrow('SEVERITY_THRESHOLD');
   });
 
   it('should throw if SNYK_TOKEN is missing', () => {
@@ -74,9 +72,11 @@ describe('loadConfig', () => {
     expect(() => loadConfig()).toThrow('SNYK_TOKEN');
   });
 
-  it('should throw if SNYK_ORG_ID is missing', () => {
+  it('should require SNYK_ORG_ID only for scoped REST inventory', () => {
     setRequiredEnv();
     delete process.env['SNYK_ORG_ID'];
+    expect(loadConfig().snykOrgId).toBe('local-cli');
+    process.env['SNYK_PROJECT_IDS'] = 'project';
     expect(() => loadConfig()).toThrow('SNYK_ORG_ID');
   });
 
@@ -92,5 +92,34 @@ describe('loadConfig', () => {
     process.env['SNYK_PROJECT_IDS'] = 'proj-1,proj-2';
     const config = loadConfig();
     expect(config.snykProjectIds).toEqual(['proj-1', 'proj-2']);
+  });
+
+  it('rejects unknown package managers instead of silently doing nothing', () => {
+    setRequiredEnv();
+    process.env['PACKAGE_MANAGERS'] = 'npm,not-a-manager';
+    expect(() => loadConfig()).toThrow(/PACKAGE_MANAGERS.*not-a-manager/);
+  });
+
+  it.each([
+    ['DRY_RUN', 'sometimes'],
+    ['RUN_TESTS', 'yes'],
+    ['ENABLE_COPILOT_AGENT_FALLBACK', 'enabled'],
+  ])('rejects invalid boolean value for %s', (name, value) => {
+    setRequiredEnv();
+    process.env[name] = value;
+    expect(() => loadConfig()).toThrow(name);
+  });
+
+  it('rejects negative issue limits', () => {
+    setRequiredEnv();
+    process.env['MAX_ISSUES_PER_RUN'] = '-1';
+    expect(() => loadConfig()).toThrow('MAX_ISSUES_PER_RUN');
+  });
+
+  it('does not require a GitHub token for a dry run', () => {
+    setRequiredEnv();
+    process.env['DRY_RUN'] = 'true';
+    delete process.env['GITHUB_TOKEN'];
+    expect(loadConfig().githubToken).toBeUndefined();
   });
 });

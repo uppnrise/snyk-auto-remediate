@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildSarifOutput } from '../../../src/reporting/sarif-writer.js';
+import { buildSarifOutput, selectReportableIssues } from '../../../src/reporting/sarif-writer.js';
 import type { SnykIssue } from '../../../src/snyk/types.js';
 
 const sampleIssue: SnykIssue = {
@@ -35,6 +35,10 @@ const sampleIssue: SnykIssue = {
         ],
       },
     ],
+  },
+  relationships: {
+    organization: { data: { id: 'org', type: 'organization' } },
+    scan_item: { data: { id: 'project', type: 'project' } },
   },
 };
 
@@ -103,5 +107,16 @@ describe('buildSarifOutput', () => {
     expect(results[0]!.level).toBe('error'); // critical
     expect(results[1]!.level).toBe('warning'); // medium
     expect(results[2]!.level).toBe('note'); // low
+  });
+
+  it('excludes findings verified as fixed from the uploaded report', () => {
+    expect(selectReportableIssues([sampleIssue], [sampleIssue.id])).toEqual([]);
+  });
+
+  it('restricts report findings to explicitly scoped project IDs', () => {
+    expect(selectReportableIssues([sampleIssue], [], ['another-project'])).toEqual([]);
+    expect(
+      selectReportableIssues([sampleIssue], [], [sampleIssue.relationships.scan_item.data.id]),
+    ).toEqual([sampleIssue]);
   });
 });

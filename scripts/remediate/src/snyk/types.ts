@@ -1,10 +1,11 @@
 export type Severity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type SeverityThreshold = Exclude<Severity, 'info'>;
 export type PackageManager =
-  'npm' | 'yarn' | 'pip' | 'poetry' | 'maven' | 'gradle' | 'go' | 'composer';
+  'npm' | 'yarn' | 'pnpm' | 'pip' | 'poetry' | 'maven' | 'gradle' | 'go' | 'composer';
 export type NonActionableReason =
   | 'missing_coordinates'
   | 'cli_not_correlated'
+  | 'project_not_correlated'
   | 'ambiguous_upgrade_path'
   | 'missing_exact_target'
   | 'unsupported_manifest_shape'
@@ -135,11 +136,10 @@ export interface RemediationConfig {
   snykOrgId: string;
   snykProjectIds?: string[];
   githubRepository: string;
-  githubToken: string;
+  githubToken?: string;
   severityThreshold: SeverityThreshold;
   packageManagers?: PackageManager[];
   dryRun: boolean;
-  maxPrsPerRun: number;
   maxIssuesPerRun: number;
   workingDirectory: string;
   enableCopilotAgentFallback: boolean;
@@ -166,6 +166,9 @@ export interface RemediationReport {
   dryRun: boolean;
   fixResults: FixResult[];
   issuesCreated: number;
+  issuesPlanned: number;
+  issuesUpdated: number;
+  issuesClosed: number;
   prsCreated: number;
   errors: string[];
   actionableFindings?: number;
