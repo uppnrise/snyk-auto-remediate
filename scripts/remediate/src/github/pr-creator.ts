@@ -1,5 +1,6 @@
 import { logger } from '../utils/logger.js';
 import type { RemediationConfig } from '../snyk/types.js';
+import { GitHubApiClient } from './api-client.js';
 
 export interface PrDetails {
   title: string;
@@ -15,6 +16,23 @@ export interface CreatedPr {
   number: number;
   html_url: string;
   title: string;
+  created: boolean;
+}
+
+async function applyPrMetadata(
+  client: GitHubApiClient,
+  pullNumber: number,
+  details: PrDetails,
+): Promise<void> {
+  if (details.labels?.length) {
+    for (const label of details.labels) {
+      await client.ensureLabel(label, '6f42c1', 'Snyk remediation workflow label');
+    }
+    await client.addLabels(pullNumber, details.labels);
+  }
+  if (details.reviewers?.length || details.teamReviewers?.length) {
+    await client.requestReviewers(pullNumber, details.reviewers ?? [], details.teamReviewers ?? []);
+  }
 }
 
 export async function createOrUpdatePr(
@@ -23,100 +41,35 @@ export async function createOrUpdatePr(
 ): Promise<CreatedPr | null> {
   if (config.dryRun) {
     logger.info(
-      `[dry-run] Would create PR: "${details.title}" (${details.head} -> ${details.base})`,
+      `[dry-run] Would create or update PR: "${details.title}" (${details.head} -> ${details.base})`,
     );
     return null;
   }
+  if (!config.githubToken) throw new Error('GITHUB_TOKEN is required to create or update a PR');
 
-  const [owner, repo] = config.githubRepository.split('/');
-  if (!owner || !repo) {
-    throw new Error(`Invalid GITHUB_REPOSITORY: ${config.githubRepository}`);
-  }
-
-  // Authorization value is masked in logs by logger.ts maskSecrets()
-  const authValue = 'Bearer ' + config.githubToken;
-  const headers: Record<string, string> = {
-    Authorization: authValue,
-    Accept: 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json',
-  };
-
-  const apiBase = 'https://api.github.com';
-
-  // Check if PR already exists from head to base
-  const listUrl = `${apiBase}/repos/${owner}/${repo}/pulls?head=${owner}:${details.head}&base=${details.base}&state=open`;
-  const listResponse = await fetch(listUrl, { headers });
-
-  if (listResponse.ok) {
-    const existing = (await listResponse.json()) as Array<{
-      number: number;
-      html_url: string;
-      title: string;
-    }>;
-    if (existing.length > 0 && existing[0]) {
-      logger.info(`PR already exists: #${existing[0].number} — ${existing[0].html_url}`);
-      return {
-        number: existing[0].number,
-        html_url: existing[0].html_url,
-        title: existing[0].title,
-      };
-    }
-  }
-
-  // Create new PR
-  const createUrl = `${apiBase}/repos/${owner}/${repo}/pulls`;
-  const createResponse = await fetch(createUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
+  const client = new GitHubApiClient(config.githubToken, config.githubRepository);
+  const existing = (await client.listPulls(details.head, details.base))[0];
+  if (existing) {
+    const updated = await client.updatePull(existing.number, {
       title: details.title,
       body: details.body,
-      head: details.head,
       base: details.base,
-      draft: false,
-    }),
+    });
+    await applyPrMetadata(client, existing.number, details);
+    logger.info(`Updated PR #${updated.number}: ${updated.html_url}`);
+    return { ...updated, created: false };
+  }
+
+  const created = await client.createPull({
+    title: details.title,
+    body: details.body,
+    head: details.head,
+    base: details.base,
+    draft: false,
   });
-
-  if (!createResponse.ok) {
-    const body = await createResponse.text();
-    throw new Error(`Failed to create PR: ${createResponse.status} ${body}`);
-  }
-
-  const pr = (await createResponse.json()) as {
-    number: number;
-    html_url: string;
-    title: string;
-    node_id: string;
-  };
-
-  logger.info(`Created PR #${pr.number}: ${pr.html_url}`);
-
-  // Add labels
-  if (details.labels && details.labels.length > 0) {
-    await fetch(`${apiBase}/repos/${owner}/${repo}/issues/${pr.number}/labels`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ labels: details.labels }),
-    });
-  }
-
-  // Add reviewers
-  if (
-    (details.reviewers && details.reviewers.length > 0) ||
-    (details.teamReviewers && details.teamReviewers.length > 0)
-  ) {
-    await fetch(`${apiBase}/repos/${owner}/${repo}/pulls/${pr.number}/requested_reviewers`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        reviewers: details.reviewers ?? [],
-        team_reviewers: details.teamReviewers ?? [],
-      }),
-    });
-  }
-
-  return { number: pr.number, html_url: pr.html_url, title: pr.title };
+  await applyPrMetadata(client, created.number, details);
+  logger.info(`Created PR #${created.number}: ${created.html_url}`);
+  return { ...created, created: true };
 }
 
 export function buildPrBody(
@@ -130,7 +83,7 @@ This PR was automatically generated by the **Snyk Auto-Remediation toolkit** to 
 
 ### 📦 Changes Made
 
-${fixedPackages.map((p) => `- ${p}`).join('\n')}
+${fixedPackages.map((item) => `- ${item}`).join('\n')}
 
 ### 🐛 Fixed Snyk Findings
 
@@ -143,7 +96,6 @@ ${fixedIssueIds.map((id) => `- \`${id}\``).join('\n')}
 ---
 
 > **Note:** This PR was created automatically. Please review the changes carefully before merging.
-> If you have questions or concerns, please comment on this PR.
 
 <!-- snyk-auto-remediation: true -->
 `;

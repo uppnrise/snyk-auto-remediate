@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NpmFixer } from '../../../src/fixers/npm-fixer.js';
-import { YarnFixer } from '../../../src/fixers/yarn-fixer.js';
-import { PipFixer } from '../../../src/fixers/pip-fixer.js';
-import { PoetryFixer } from '../../../src/fixers/poetry-fixer.js';
-import { MavenFixer } from '../../../src/fixers/maven-fixer.js';
-import { GradleFixer } from '../../../src/fixers/gradle-fixer.js';
-import { GoFixer } from '../../../src/fixers/go-fixer.js';
-import { ComposerFixer } from '../../../src/fixers/composer-fixer.js';
+import { ExactActionFixer } from '../../../src/fixers/exact-action-fixer.js';
 import type { RemediationAction, SnykIssue } from '../../../src/snyk/types.js';
 
 const issue: SnykIssue = {
@@ -28,14 +21,15 @@ const issue: SnykIssue = {
   },
 };
 const fixers = [
-  new NpmFixer(),
-  new YarnFixer(),
-  new PipFixer(),
-  new PoetryFixer(),
-  new MavenFixer(),
-  new GradleFixer(),
-  new GoFixer(),
-  new ComposerFixer(),
+  new ExactActionFixer('npm'),
+  new ExactActionFixer('yarn'),
+  new ExactActionFixer('pnpm'),
+  new ExactActionFixer('pip'),
+  new ExactActionFixer('poetry'),
+  new ExactActionFixer('maven'),
+  new ExactActionFixer('gradle'),
+  new ExactActionFixer('go'),
+  new ExactActionFixer('composer'),
 ];
 
 describe('exact action fixers', () => {
@@ -73,7 +67,12 @@ describe('exact action fixers', () => {
       findingKeys: [issue.attributes.key],
       evidence: 'snyk-cli-upgrade-path',
     };
-    const result = await new NpmFixer().applyFix('.', [action], new Map([[issue.id, issue]]), true);
+    const result = await new ExactActionFixer('npm').applyFix(
+      '.',
+      [action],
+      new Map([[issue.id, issue]]),
+      true,
+    );
     expect(result.attemptedActions).toEqual([]);
   });
 
@@ -88,7 +87,7 @@ describe('exact action fixers', () => {
       evidence: 'snyk-cli-upgrade-path',
     };
 
-    const result = await new NpmFixer().applyFix(
+    const result = await new ExactActionFixer('npm').applyFix(
       '/path/that/does/not/exist',
       [action],
       new Map([[issue.id, issue]]),

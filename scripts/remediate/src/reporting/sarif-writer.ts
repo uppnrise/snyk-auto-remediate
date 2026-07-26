@@ -67,6 +67,20 @@ function severityToCvss(severity: string): string {
   }
 }
 
+export function selectReportableIssues(
+  issues: SnykIssue[],
+  verifiedFindingIds: string[],
+  scopedProjectIds?: string[],
+): SnykIssue[] {
+  const verified = new Set(verifiedFindingIds);
+  const scoped = scopedProjectIds?.length ? new Set(scopedProjectIds) : undefined;
+  return issues.filter(
+    (issue) =>
+      !verified.has(issue.id) &&
+      (scoped === undefined || scoped.has(issue.relationships.scan_item.data.id)),
+  );
+}
+
 export function buildSarifOutput(issues: SnykIssue[], repository: string): SarifLog {
   const rules: SarifRule[] = [];
   const results: SarifResult[] = [];

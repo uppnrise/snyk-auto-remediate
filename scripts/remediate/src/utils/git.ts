@@ -14,7 +14,7 @@ export async function gitCheckoutBranch(
   branchName: string,
   createNew = false,
 ): Promise<void> {
-  const args = createNew ? ['checkout', '-b', branchName] : ['checkout', branchName];
+  const args = createNew ? ['checkout', '-B', branchName] : ['checkout', branchName];
   await execCommand('git', args, { cwd: workingDirectory });
 }
 
@@ -60,15 +60,23 @@ export async function gitBranchExists(
 }
 
 export function buildRemediationBranchName(targetBranch: string, suffix?: string): string {
-  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '-');
   const safeSuffix = suffix?.replace(/[^a-zA-Z0-9_-]/g, '-');
   const suffixSegment = safeSuffix ? `-${safeSuffix}` : '';
-  return `chore/security/snyk-remediation-${safeBranch}${suffixSegment}-${date}`;
+  return `chore/security/snyk-remediation-${safeBranch}${suffixSegment}`;
 }
 
 export async function gitPush(workingDirectory: string, branchName: string): Promise<void> {
   logger.info(`Pushing branch: ${branchName}`);
+  try {
+    await execCommand(
+      'git',
+      ['fetch', 'origin', `refs/heads/${branchName}:refs/remotes/origin/${branchName}`],
+      { cwd: workingDirectory },
+    );
+  } catch {
+    logger.debug(`No existing remote remediation branch found for ${branchName}`);
+  }
   await execCommand('git', ['push', 'origin', branchName, '--force-with-lease'], {
     cwd: workingDirectory,
   });

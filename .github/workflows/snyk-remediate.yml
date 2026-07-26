@@ -16,10 +16,6 @@ on:
         description: 'Dry run — no changes committed or PRs opened'
         type: boolean
         default: false
-      max-prs-per-run:
-        description: 'Maximum number of PRs to open'
-        type: string
-        default: '5'
       max-issues-per-run:
         description: 'Maximum number of GitHub Issues to create'
         type: string
@@ -48,7 +44,6 @@ jobs:
       target-branches: ${{ github.event.inputs['target-branches'] || 'master' }}
       severity-threshold: ${{ github.event.inputs['severity-threshold'] || 'high' }}
       dry-run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs['dry-run'] == 'true' }}
-      max-prs-per-run: ${{ fromJSON(github.event.inputs['max-prs-per-run'] || '5') }}
       max-issues-per-run: ${{ fromJSON(github.event.inputs['max-issues-per-run'] || '10') }}
       enable-copilot-agent-fallback: ${{ github.event_name != 'workflow_dispatch' || github.event.inputs['enable-copilot-agent-fallback'] == 'true' }}
       pr-labels: 'security,dependencies,snyk,automated'

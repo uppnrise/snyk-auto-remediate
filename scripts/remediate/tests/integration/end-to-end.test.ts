@@ -49,7 +49,7 @@ describe('End-to-End Remediation Flow', () => {
     expect(ecosystems.some((e) => e.packageManager === 'npm')).toBe(true);
   });
 
-  it('should deduplicate and partition issues from fixture data', async () => {
+  it('should deduplicate issues from fixture data', async () => {
     const { readFileSync } = await import('fs');
     const { join } = await import('path');
     const { fileURLToPath } = await import('url');
@@ -58,7 +58,7 @@ describe('End-to-End Remediation Flow', () => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
 
-    const { deduplicateIssues, partitionByFixability } = await import('../../src/utils/dedup.js');
+    const { deduplicateIssues } = await import('../../src/utils/dedup.js');
     type SnykApiResponse = { data: import('../../src/snyk/types.js').SnykIssue[] };
 
     const rawData = readFileSync(
@@ -71,12 +71,10 @@ describe('End-to-End Remediation Flow', () => {
     const deduped = deduplicateIssues(issues);
     expect(deduped).toHaveLength(2);
 
-    const { fixable, unfixable } = partitionByFixability(deduped);
-    // lodash is fixable, axios is not
-    expect(fixable).toHaveLength(1);
-    expect(unfixable).toHaveLength(1);
-    expect(fixable[0]!.id).toBe('SNYK-JS-LODASH-590103');
-    expect(unfixable[0]!.id).toBe('SNYK-JS-AXIOS-1038009');
+    expect(deduped.map((item) => item.id)).toEqual([
+      'SNYK-JS-LODASH-590103',
+      'SNYK-JS-AXIOS-1038009',
+    ]);
   });
 
   it('should build valid SARIF from fixture issues', async () => {

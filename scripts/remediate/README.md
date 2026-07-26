@@ -1,144 +1,93 @@
-# Snyk Auto-Remediation Engine
+# Remediation engine
 
-A production-ready TypeScript engine for automatically remediating Snyk security findings in GitHub repositories.
-
-## Overview
-
-This engine:
-
-1. **Fetches** Snyk security findings via the Snyk REST API (paginated, with retry/backoff), with
-   authenticated local CLI inventory fallback when the account is not entitled to REST access
-2. **Classifies** findings into fixable and unfixable categories
-3. **Auto-fixes** dependency-level issues using package-manager-native commands
-4. **Creates GitHub Issues** assigned to `@copilot` for unfixable findings
-5. **Generates** JSON, SARIF, and Markdown reports
-
-On Snyk Free and Team plans, a valid CLI token can receive `403 Forbidden` from the REST issue
-inventory API. In that case the engine uses `snyk test --json` results from detected projects in
-`WORKING_DIRECTORY`. This fallback is repository-local and cannot discover issues elsewhere in the
-Snyk organization.
+The TypeScript engine used by the repository's reusable GitHub Actions workflow.
 
 ## Requirements
 
-- Node.js 20+
-- `tsx` (installed via devDependencies)
+- Node.js 20.19 or newer
+- Snyk CLI
+- Git
+- The package managers used by the target project
 
-## Environment Variables
+The reusable workflow installs a pinned Snyk CLI and the required language toolchains. For local
+execution, install the Snyk CLI separately.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `SNYK_TOKEN` | ✅ | — | Snyk API authentication token |
-| `SNYK_ORG_ID` | ✅ | — | Snyk organization ID |
-| `GITHUB_REPOSITORY` | ✅ | — | `owner/repo` format |
-| `GITHUB_TOKEN` | ✅ | — | GitHub token (for creating issues/PRs) |
-| `SNYK_PROJECT_IDS` | ❌ | — | Comma-separated Snyk project IDs to scope |
-| `SEVERITY_THRESHOLD` | ❌ | `high` | Minimum severity: `critical`, `high`, `medium`, `low` |
-| `PACKAGE_MANAGERS` | ❌ | auto-detect | Comma-separated: `npm,yarn,pip,poetry,maven,gradle,go,composer` |
-| `DRY_RUN` | ❌ | `false` | If `true`, no changes are committed or PRs opened |
-| `MAX_PRS_PER_RUN` | ❌ | `5` | Max PRs to open per run |
-| `MAX_ISSUES_PER_RUN` | ❌ | `10` | Max GitHub Issues to create per run |
-| `WORKING_DIRECTORY` | ❌ | `.` | Working directory for package manager commands |
-| `ENABLE_COPILOT_AGENT_FALLBACK` | ❌ | `true` | Create Issues for unfixable findings |
-| `COPILOT_ASSIGNEE` | ❌ | `copilot` | GitHub username to assign Issues to |
-| `FAIL_ON_NO_FIX` | ❌ | `false` | Exit code 2 if no fixes were applied |
-| `RUN_TESTS` | ❌ | `true` | Run tests after applying fixes |
-| `TEST_COMMAND` | ❌ | — | Custom test command |
-| `TARGET_BRANCH` | ❌ | `main` | Target branch being remediated |
-| `PR_LABELS` | ❌ | `security,dependencies,snyk,automated` | Labels for PRs |
-| `ISSUE_LABELS` | ❌ | `security,snyk,ai-remediation` | Labels for Issues |
-| `PR_REVIEWERS` | ❌ | — | Comma-separated GitHub usernames for PR review |
-| `PR_TEAM_REVIEWERS` | ❌ | — | Comma-separated GitHub team slugs for PR review |
-
-## Running Locally
+## Run locally
 
 ```bash
-cd scripts/remediate
-npm install
-export SNYK_TOKEN=your-snyk-token
-export SNYK_ORG_ID=your-org-id
+npm ci
+
+export SNYK_TOKEN=...
 export GITHUB_REPOSITORY=owner/repo
-export GITHUB_TOKEN=your-github-token
+export WORKING_DIRECTORY=/absolute/path/to/target
 export DRY_RUN=true
-npx tsx src/index.ts
+
+npm start
 ```
 
-## Development
+`GITHUB_TOKEN` is optional during a dry run. It is required when the engine may push a branch or
+mutate pull requests and issues.
 
-```bash
-# Type check
-npm run build
+Without `SNYK_PROJECT_IDS`, inventory comes exclusively from the checked-out repository's CLI
+scan, and `SNYK_ORG_ID` is optional. Set both `SNYK_ORG_ID` and a comma-separated list of exact
+project IDs to enable scoped REST inventory.
 
-# Run tests
-npm test
+## Environment variables
 
-# Run tests with coverage
-npm run test:coverage
+| Variable | Required | Default |
+| --- | --- | --- |
+| `SNYK_TOKEN` | yes | — |
+| `SNYK_ORG_ID` | with `SNYK_PROJECT_IDS` | `local-cli` |
+| `GITHUB_REPOSITORY` | yes | — |
+| `GITHUB_TOKEN` | unless dry-run | — |
+| `SNYK_PROJECT_IDS` | no | local CLI inventory |
+| `SEVERITY_THRESHOLD` | no | `high` |
+| `PACKAGE_MANAGERS` | no | auto-detect |
+| `DRY_RUN` | no | `false` |
+| `MAX_ISSUES_PER_RUN` | no | `10` |
+| `WORKING_DIRECTORY` | no | `.` |
+| `ENABLE_COPILOT_AGENT_FALLBACK` | no | `true` |
+| `COPILOT_ASSIGNEE` | no | `copilot` |
+| `FAIL_ON_NO_FIX` | no | `false` |
+| `RUN_TESTS` | no | `true` |
+| `TEST_COMMAND` | no | detected suites |
+| `TARGET_BRANCH` | no | `main` |
+| `REMEDIATION_BRANCH_SUFFIX` | no | unset |
+| `PR_LABELS` | no | `security,dependencies,snyk,automated` |
+| `ISSUE_LABELS` | no | `security,snyk,ai-remediation` |
+| `PR_REVIEWERS` | no | unset |
+| `PR_TEAM_REVIEWERS` | no | unset |
 
-# Lint
-npm run lint
+Invalid booleans, severity values, package-manager names, repository names, and negative limits fail
+fast with an actionable error.
 
-# Format
-npm run format
+Supported `PACKAGE_MANAGERS` values are:
+
+```text
+npm,yarn,pnpm,pip,poetry,maven,gradle,go,composer
 ```
 
-## Architecture
-
-```
-src/
-├── index.ts                    # Main entry point
-├── snyk/
-│   ├── api-client.ts           # Snyk REST API client (paginated, retry/backoff)
-│   ├── cli-runner.ts           # Snyk CLI wrapper + package info extraction
-│   └── types.ts                # TypeScript types for Snyk API responses
-├── detectors/
-│   └── language-detector.ts    # Ecosystem auto-detection from manifest files
-├── fixers/
-│   ├── base-fixer.ts           # Abstract base class for all fixers
-│   ├── npm-fixer.ts            # npm install --save <pkg>@<version>
-│   ├── yarn-fixer.ts           # yarn upgrade <pkg>@<version>
-│   ├── pip-fixer.ts            # pip install --upgrade <pkg>>=<version>
-│   ├── poetry-fixer.ts         # poetry add <pkg>@^<version>
-│   ├── maven-fixer.ts          # mvn versions:use-latest-releases
-│   ├── gradle-fixer.ts         # ./gradlew dependencyUpdates
-│   ├── go-fixer.ts             # go get <pkg>@v<version> && go mod tidy
-│   └── composer-fixer.ts       # composer require <pkg>:^<version>
-├── github/
-│   ├── api-client.ts           # GitHub REST API client
-│   ├── issue-creator.ts        # Create/update Issues for unfixable findings
-│   └── pr-creator.ts           # Create/update PRs for fixed findings
-├── reporting/
-│   ├── json-writer.ts          # Write snyk-remediation-report.json
-│   ├── sarif-writer.ts         # Write SARIF output for GitHub Security
-│   └── summary-writer.ts       # Write GitHub Actions step summary
-└── utils/
-    ├── config.ts               # Load + validate config from env vars
-    ├── dedup.ts                 # Deduplicate and partition issues
-    ├── exec.ts                  # Spawn child processes with timeout
-    ├── git.ts                   # Git operations (checkout, commit, push)
-    └── logger.ts                # Structured logger with secret masking
-```
-
-## Exit Codes
-
-| Code | Meaning |
-|------|---------|
-| `0` | Success |
-| `1` | Runtime error |
-| `2` | No fixes applied when `FAIL_ON_NO_FIX=true` |
-
-## Security
-
-- Tokens are **never logged** — the logger automatically masks `Bearer`, `token TOKEN`, `ghp_*`, and `snyk_*` patterns.
-- All API calls use HTTPS.
-- Retry-with-exponential-backoff on Snyk API 429/5xx responses.
+`TEST_COMMAND` is executed as a shell expression, so quoted arguments and command chains work.
+Without it, the engine runs every detected ecosystem's test command. npm, Yarn, and pnpm tests are
+only selected when `package.json` contains a real `scripts.test` entry.
 
 ## Reports
 
-After each run, the following files are written to the working directory:
+Reports are written to `WORKING_DIRECTORY`:
 
-| File | Format | Description |
-|------|--------|-------------|
-| `snyk-remediation-report.json` | JSON | Machine-readable remediation report |
-| `snyk-remediation-report.sarif` | SARIF 2.1.0 | Uploaded to GitHub Security tab |
+- `snyk-remediation-report.json`
+- `snyk-remediation-report.sarif`
+- the GitHub step summary when `GITHUB_STEP_SUMMARY` is set
 
-A rich Markdown summary is also written to `$GITHUB_STEP_SUMMARY` when running in GitHub Actions.
+Dry-run reporting distinguishes planned issue work from created, updated, and closed issues.
+
+## Validation
+
+```bash
+npm test -- --run
+npm run build
+npm run lint
+npm run format:check
+npm run test:coverage
+npm audit --audit-level=moderate
+```
