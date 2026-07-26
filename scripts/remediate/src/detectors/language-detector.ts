@@ -29,19 +29,20 @@ export function detectEcosystems(
     logger.debug(`Detected ${packageManager} ecosystem (files: ${manifestFiles.join(', ')})`);
   };
 
-  if (existsSync(join(workingDirectory, 'pnpm-lock.yaml'))) {
+  if (allowed('pnpm') && existsSync(join(workingDirectory, 'pnpm-lock.yaml'))) {
     add(
       'pnpm',
       ['package.json', 'pnpm-lock.yaml'].filter((file) => existsSync(join(workingDirectory, file))),
     );
-  } else if (existsSync(join(workingDirectory, 'yarn.lock'))) {
+  } else if (allowed('yarn') && existsSync(join(workingDirectory, 'yarn.lock'))) {
     add(
       'yarn',
       ['package.json', 'yarn.lock'].filter((file) => existsSync(join(workingDirectory, file))),
     );
   } else if (
-    existsSync(join(workingDirectory, 'package-lock.json')) ||
-    existsSync(join(workingDirectory, 'package.json'))
+    allowed('npm') &&
+    (existsSync(join(workingDirectory, 'package-lock.json')) ||
+      existsSync(join(workingDirectory, 'package.json')))
   ) {
     add(
       'npm',
