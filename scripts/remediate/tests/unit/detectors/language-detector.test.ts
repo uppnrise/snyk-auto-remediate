@@ -62,6 +62,14 @@ describe('detectEcosystems', () => {
     expect(ecosystems.map((item) => item.packageManager)).toEqual(['yarn']);
   });
 
+  it.each(['yarn.lock', 'pnpm-lock.yaml'])(
+    'falls back to an allowed npm manager when %s belongs to a disallowed manager',
+    (lockfile) => {
+      const ecosystems = detectEcosystems(temporaryProject(['package.json', lockfile]), ['npm']);
+      expect(ecosystems.map((item) => item.packageManager)).toEqual(['npm']);
+    },
+  );
+
   it('detects pnpm from its lockfile', () => {
     const ecosystems = detectEcosystems(temporaryProject(['package.json', 'pnpm-lock.yaml']));
     expect(ecosystems.map((item) => item.packageManager)).toEqual(['pnpm']);
