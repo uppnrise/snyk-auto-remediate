@@ -19,9 +19,12 @@ export function buildMarkdownSummary(report: RemediationReport): string {
     `| Total Findings | ${report.totalFindings} |`,
     `| Fixable Findings | ${report.fixableFindings} |`,
     `| Successfully Fixed | ${report.fixedFindings} |`,
-    `| Unfixable (Issues Created) | ${report.unfixableFindings} |`,
+    `| Findings Requiring Fallback | ${report.unfixableFindings} |`,
     `| PRs Created | ${report.prsCreated} |`,
     `| GitHub Issues Created | ${report.issuesCreated} |`,
+    `| GitHub Issues Updated | ${report.issuesUpdated} |`,
+    `| GitHub Issues Closed | ${report.issuesClosed} |`,
+    `| GitHub Issues Planned | ${report.issuesPlanned} |`,
     '',
   ];
 

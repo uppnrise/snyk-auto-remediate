@@ -9,9 +9,6 @@ interface EcosystemSignature {
 }
 
 const ECOSYSTEM_SIGNATURES: EcosystemSignature[] = [
-  { packageManager: 'yarn', manifestFiles: ['yarn.lock'] },
-  { packageManager: 'npm', manifestFiles: ['package-lock.json', 'package.json'] },
-  { packageManager: 'poetry', manifestFiles: ['poetry.lock', 'pyproject.toml'] },
   { packageManager: 'pip', manifestFiles: ['requirements.txt'] },
   { packageManager: 'maven', manifestFiles: ['pom.xml'] },
   { packageManager: 'gradle', manifestFiles: ['build.gradle', 'build.gradle.kts'] },
@@ -24,6 +21,43 @@ export function detectEcosystems(
   allowedManagers?: PackageManager[],
 ): DetectedEcosystem[] {
   const detected: DetectedEcosystem[] = [];
+  const allowed = (manager: PackageManager): boolean =>
+    allowedManagers === undefined || allowedManagers.includes(manager);
+  const add = (packageManager: PackageManager, manifestFiles: string[]): void => {
+    if (!allowed(packageManager)) return;
+    detected.push({ packageManager, manifestFiles, workingDirectory });
+    logger.debug(`Detected ${packageManager} ecosystem (files: ${manifestFiles.join(', ')})`);
+  };
+
+  if (allowed('pnpm') && existsSync(join(workingDirectory, 'pnpm-lock.yaml'))) {
+    add(
+      'pnpm',
+      ['package.json', 'pnpm-lock.yaml'].filter((file) => existsSync(join(workingDirectory, file))),
+    );
+  } else if (allowed('yarn') && existsSync(join(workingDirectory, 'yarn.lock'))) {
+    add(
+      'yarn',
+      ['package.json', 'yarn.lock'].filter((file) => existsSync(join(workingDirectory, file))),
+    );
+  } else if (
+    allowed('npm') &&
+    (existsSync(join(workingDirectory, 'package-lock.json')) ||
+      existsSync(join(workingDirectory, 'package.json')))
+  ) {
+    add(
+      'npm',
+      ['package.json', 'package-lock.json'].filter((file) =>
+        existsSync(join(workingDirectory, file)),
+      ),
+    );
+  }
+
+  if (existsSync(join(workingDirectory, 'poetry.lock'))) {
+    add(
+      'poetry',
+      ['pyproject.toml', 'poetry.lock'].filter((file) => existsSync(join(workingDirectory, file))),
+    );
+  }
 
   for (const sig of ECOSYSTEM_SIGNATURES) {
     if (allowedManagers && !allowedManagers.includes(sig.packageManager)) {
@@ -33,12 +67,7 @@ export function detectEcosystems(
     const foundFiles = sig.manifestFiles.filter((file) => existsSync(join(workingDirectory, file)));
 
     if (foundFiles.length > 0) {
-      detected.push({
-        packageManager: sig.packageManager,
-        manifestFiles: foundFiles,
-        workingDirectory,
-      });
-      logger.debug(`Detected ${sig.packageManager} ecosystem (files: ${foundFiles.join(', ')})`);
+      add(sig.packageManager, foundFiles);
     }
   }
 

@@ -87,6 +87,113 @@ describe('CLI correlation', () => {
     ]);
   });
 
+  it('does not correlate an organization finding when the local CLI project is unknown', () => {
+    const cli = normalizeCliOutput(
+      {
+        vulnerabilities: [
+          {
+            id: issue.attributes.key,
+            packageName: 'lodash',
+            version: '4.17.15',
+            upgradePath: ['lodash@4.17.21'],
+            isUpgradable: true,
+          },
+        ],
+        packageManager: 'npm',
+      },
+      ecosystem,
+    );
+
+    const plan = buildRemediationPlan([issue], cli);
+
+    expect(plan.actions).toEqual([]);
+    expect(plan.nonActionable[0]?.reason).toBe('project_not_correlated');
+  });
+
+  it('allows an unidentified CLI project only when exactly one configured project is in scope', () => {
+    const cli = normalizeCliOutput(
+      {
+        vulnerabilities: [
+          {
+            id: issue.attributes.key,
+            packageName: 'lodash',
+            version: '4.17.15',
+            upgradePath: ['lodash@4.17.21'],
+            isUpgradable: true,
+          },
+        ],
+        packageManager: 'npm',
+      },
+      ecosystem,
+    );
+
+    expect(
+      buildRemediationPlan([issue], cli, { scopedProjectIds: ['project'] }).actions,
+    ).toHaveLength(1);
+    expect(
+      buildRemediationPlan([issue], cli, { scopedProjectIds: ['project', 'other'] }).actions,
+    ).toEqual([]);
+  });
+
+  it('uses a single explicit project scope when CLI output has only a human project name', () => {
+    const cli = normalizeCliOutput(
+      {
+        vulnerabilities: [
+          {
+            id: issue.attributes.key,
+            packageName: 'lodash',
+            version: '4.17.15',
+            upgradePath: ['lodash@4.17.21'],
+            isUpgradable: true,
+          },
+        ],
+        packageManager: 'npm',
+        projectName: 'human-readable-name',
+      },
+      ecosystem,
+    );
+
+    expect(
+      buildRemediationPlan([issue], cli, { scopedProjectIds: ['project'] }).actions,
+    ).toHaveLength(1);
+  });
+
+  it('keeps remediation actions from different Snyk projects isolated', () => {
+    const otherIssue: SnykIssue = {
+      ...issue,
+      id: 'other-rest-id',
+      relationships: {
+        ...issue.relationships,
+        scan_item: { data: { id: 'other-project', type: 'project' } },
+      },
+    };
+    const baseFinding: CliVulnerability = {
+      issueKey: issue.attributes.key,
+      packageName: 'lodash',
+      version: '4.17.15',
+      packageManager: 'npm',
+      fixedIn: ['4.17.21'],
+      upgradePath: ['lodash@4.17.21'],
+      dependencyPath: ['lodash@4.17.15'],
+      isUpgradable: true,
+      isPatchable: false,
+    };
+
+    const plan = buildRemediationPlan(
+      [issue, otherIssue],
+      [
+        { ...baseFinding, projectId: 'project' },
+        { ...baseFinding, projectId: 'other-project' },
+      ],
+    );
+
+    expect(plan.actions).toHaveLength(2);
+    expect(plan.actions.map((action) => action.projectId).sort()).toEqual([
+      'other-project',
+      'project',
+    ]);
+  });
+
   it('does not guess when the upgrade path has no exact target', () => {
     const cli = normalizeCliOutput(
       {
@@ -101,6 +208,7 @@ describe('CLI correlation', () => {
           },
         ],
         packageManager: 'npm',
+        projectName: 'project',
       },
       ecosystem,
     );
@@ -125,6 +233,7 @@ describe('CLI correlation', () => {
             },
           ],
           packageManager: 'npm',
+          projectName: 'project',
         },
         ecosystem,
       );
@@ -148,6 +257,7 @@ describe('CLI correlation', () => {
             },
           ],
           packageManager: 'npm',
+          projectName: 'project',
         },
         ecosystem,
       );
@@ -156,7 +266,7 @@ describe('CLI correlation', () => {
     },
   );
 
-  it('scopes verification by project ID and falls back to key-only without CLI project IDs', () => {
+  it('scopes verification by project ID and refuses unverifiable CLI output', () => {
     const action: RemediationAction = {
       packageManager: 'npm',
       packageName: 'example',

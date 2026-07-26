@@ -55,9 +55,21 @@ describe('CLI-only issue inventory', () => {
     ).toHaveLength(1);
   });
 
-  it('uses CLI inventory only for REST 403 responses', async () => {
+  it('uses local CLI inventory when no REST project scope is configured', async () => {
     const config = {
       snykOrgId: 'org-id',
+      severityThreshold: 'high',
+    } as RemediationConfig;
+    const restFetcher = (): Promise<SnykIssue[]> =>
+      Promise.reject(new Error('REST must not be called without an explicit project scope'));
+
+    await expect(loadIssueInventory(config, [upgradable], restFetcher)).resolves.toHaveLength(1);
+  });
+
+  it('falls back on REST 403 but keeps other scoped REST failures fatal', async () => {
+    const config = {
+      snykOrgId: 'org-id',
+      snykProjectIds: ['project-id'],
       severityThreshold: 'high',
     } as RemediationConfig;
     const forbidden = (): Promise<SnykIssue[]> =>

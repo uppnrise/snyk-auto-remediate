@@ -6,6 +6,7 @@ import { BaseFixer } from './base-fixer.js';
 const FILES: Record<PackageManager, string[]> = {
   npm: ['package.json', 'package-lock.json'],
   yarn: ['package.json', 'yarn.lock'],
+  pnpm: ['package.json', 'pnpm-lock.yaml'],
   pip: ['requirements.txt'],
   poetry: ['pyproject.toml', 'poetry.lock'],
   maven: ['pom.xml'],
@@ -50,7 +51,7 @@ export class ExactActionFixer extends BaseFixer {
       const path = join(cwd, file);
       if (!existsSync(path)) continue;
       const before = readFileSync(path, 'utf8');
-      let after = before;
+      let after: string;
       if (this.packageManager === 'pip') {
         const escaped = action.packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         after = before.replace(
@@ -80,6 +81,8 @@ export class ExactActionFixer extends BaseFixer {
         return this.runCommand('npm', ['install', exact, '--save-exact'], cwd);
       case 'yarn':
         return this.runCommand('yarn', ['add', '--exact', exact], cwd);
+      case 'pnpm':
+        return this.runCommand('pnpm', ['add', '--save-exact', exact], cwd);
       case 'pip':
         if (!this.editExact(cwd, action)) throw new Error('unsupported_manifest_shape');
         return this.runCommand('pip', ['install', '-r', 'requirements.txt'], cwd);

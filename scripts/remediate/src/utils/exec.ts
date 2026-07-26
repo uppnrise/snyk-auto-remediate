@@ -25,7 +25,7 @@ export function execCommand(
 
     const child = spawn(command, args, {
       cwd,
-      env: env ?? (process.env as Record<string, string>),
+      env: env ?? process.env,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

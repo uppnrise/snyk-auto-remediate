@@ -2,19 +2,12 @@ import { loadConfig } from './utils/config.js';
 import { logger } from './utils/logger.js';
 import { deduplicateIssues } from './utils/dedup.js';
 import { detectEcosystems } from './detectors/language-detector.js';
-import { NpmFixer } from './fixers/npm-fixer.js';
-import { YarnFixer } from './fixers/yarn-fixer.js';
-import { PipFixer } from './fixers/pip-fixer.js';
-import { PoetryFixer } from './fixers/poetry-fixer.js';
-import { MavenFixer } from './fixers/maven-fixer.js';
-import { GradleFixer } from './fixers/gradle-fixer.js';
-import { GoFixer } from './fixers/go-fixer.js';
-import { ComposerFixer } from './fixers/composer-fixer.js';
 import type { BaseFixer } from './fixers/base-fixer.js';
+import { ExactActionFixer } from './fixers/exact-action-fixer.js';
 import { createOrUpdateIssues } from './github/issue-creator.js';
 import { createOrUpdatePr, buildPrBody } from './github/pr-creator.js';
 import { writeJsonReport } from './reporting/json-writer.js';
-import { writeSarifReport } from './reporting/sarif-writer.js';
+import { selectReportableIssues, writeSarifReport } from './reporting/sarif-writer.js';
 import { writeStepSummary } from './reporting/summary-writer.js';
 import {
   gitHasChanges,
@@ -23,10 +16,10 @@ import {
   gitCheckoutBranch,
   buildRemediationBranchName,
   gitConfigureUser,
-  gitBranchExists,
   gitPush,
 } from './utils/git.js';
 import { runPostFixTests } from './utils/test-runner.js';
+import { prepareForSnykScan } from './utils/dependency-preparer.js';
 import type { FixResult, RemediationReport } from './snyk/types.js';
 import { scanWithSnykCli } from './snyk/cli-runner.js';
 import { loadIssueInventory } from './snyk/cli-inventory.js';
@@ -34,14 +27,15 @@ import { buildRemediationPlan, unresolvedFindingKeys } from './snyk/correlation.
 import { resolve } from 'path';
 
 const FIXERS: BaseFixer[] = [
-  new YarnFixer(),
-  new NpmFixer(),
-  new PoetryFixer(),
-  new PipFixer(),
-  new MavenFixer(),
-  new GradleFixer(),
-  new GoFixer(),
-  new ComposerFixer(),
+  new ExactActionFixer('yarn'),
+  new ExactActionFixer('pnpm'),
+  new ExactActionFixer('npm'),
+  new ExactActionFixer('poetry'),
+  new ExactActionFixer('pip'),
+  new ExactActionFixer('maven'),
+  new ExactActionFixer('gradle'),
+  new ExactActionFixer('go'),
+  new ExactActionFixer('composer'),
 ];
 
 async function main(): Promise<void> {
@@ -52,6 +46,9 @@ async function main(): Promise<void> {
   const errors: string[] = [];
   const fixResults: FixResult[] = [];
   let issuesCreated = 0;
+  let issuesUpdated = 0;
+  let issuesClosed = 0;
+  let issuesPlanned = 0;
   let prsCreated = 0;
 
   // 1. Detect ecosystems and obtain exact remediation evidence from local CLI scans.
@@ -60,7 +57,8 @@ async function main(): Promise<void> {
     await Promise.all(
       ecosystems.map(async (ecosystem) => {
         try {
-          return await scanWithSnykCli(ecosystem, config.snykToken);
+          await prepareForSnykScan(ecosystem);
+          return await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId);
         } catch (error) {
           errors.push(`Snyk CLI scan failed for ${ecosystem.packageManager}: ${String(error)}`);
           return [];
@@ -76,7 +74,9 @@ async function main(): Promise<void> {
   allIssues = deduplicateIssues(allIssues);
   logger.info(`Total unique issues: ${allIssues.length}`);
 
-  const plan = buildRemediationPlan(allIssues, cliFindings);
+  const plan = buildRemediationPlan(allIssues, cliFindings, {
+    ...(config.snykProjectIds ? { scopedProjectIds: config.snykProjectIds } : {}),
+  });
   const runtimeNonActionable = [...plan.nonActionable];
   const findingsById = new Map(allIssues.map((issue) => [issue.id, issue]));
   const actionableIds = new Set(plan.actions.flatMap((action) => action.findingIds));
@@ -99,12 +99,7 @@ async function main(): Promise<void> {
     logger.info(`Using branch: ${branchName}`);
 
     if (!config.dryRun) {
-      const branchExists = await gitBranchExists(workingDir, branchName);
-      if (!branchExists) {
-        await gitCheckoutBranch(workingDir, branchName, true);
-      } else {
-        await gitCheckoutBranch(workingDir, branchName);
-      }
+      await gitCheckoutBranch(workingDir, branchName, true);
     }
 
     for (const ecosystem of ecosystems) {
@@ -128,7 +123,7 @@ async function main(): Promise<void> {
       const result = await fixer.applyFix(workingDir, relevantActions, findingsById, config.dryRun);
       if (result.success && !config.dryRun) {
         try {
-          const after = await scanWithSnykCli(ecosystem, config.snykToken);
+          const after = await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId);
           const unverified = unresolvedFindingKeys(relevantActions, after);
           if (unverified.length > 0) {
             fixer.rollback();
@@ -215,7 +210,7 @@ async function main(): Promise<void> {
 
           const pr = await createOrUpdatePr(prDetails, config);
 
-          if (pr) prsCreated++;
+          if (pr?.created) prsCreated++;
         } catch (error) {
           const msg = `Failed to push/create PR: ${String(error)}`;
           logger.error(msg);
@@ -231,7 +226,11 @@ async function main(): Promise<void> {
 
   // 4. Create GitHub Issues for findings without a safe exact action or a verified fix.
   try {
-    issuesCreated = await createOrUpdateIssues(fallbackIssues, config);
+    const issueSummary = await createOrUpdateIssues(fallbackIssues, config);
+    issuesCreated = issueSummary.created;
+    issuesUpdated = issueSummary.updated;
+    issuesClosed = issueSummary.closed;
+    issuesPlanned = issueSummary.planned;
   } catch (error) {
     const msg = `Failed to create GitHub issues: ${String(error)}`;
     logger.error(msg);
@@ -254,6 +253,9 @@ async function main(): Promise<void> {
     dryRun: config.dryRun,
     fixResults,
     issuesCreated,
+    issuesUpdated,
+    issuesClosed,
+    issuesPlanned,
     prsCreated,
     errors,
     actionableFindings: fixable.length,
@@ -279,7 +281,9 @@ async function main(): Promise<void> {
 
   // 7. Write reports
   writeJsonReport(report, workingDir);
-  writeSarifReport(allIssues, config.githubRepository, workingDir);
+  const verifiedIds = fixResults.flatMap((result) => result.verifiedFindingIds ?? []);
+  const reportableIssues = selectReportableIssues(allIssues, verifiedIds, config.snykProjectIds);
+  writeSarifReport(reportableIssues, config.githubRepository, workingDir);
   writeStepSummary(report);
 
   // 8. Determine exit code
