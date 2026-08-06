@@ -218,6 +218,43 @@ describe('CLI correlation', () => {
     expect(plan.nonActionable[0]?.reason).toBe('missing_exact_target');
   });
 
+  it('builds an exact action from a REST remedy when local CLI evidence is unavailable', () => {
+    const restIssue = {
+      ...issue,
+      attributes: {
+        ...issue.attributes,
+        coordinates: [
+          {
+            remedies: [
+              {
+                type: 'upgrade',
+                details: { upgrade_package: 'lodash', target_version: '4.17.21' },
+              },
+            ],
+            representations: [
+              { dependency: { package_name: 'lodash', package_version: '4.17.15' } },
+            ],
+          },
+        ],
+      },
+    } as SnykIssue;
+
+    const plan = buildRemediationPlan([restIssue], [], {
+      ...{ restPackageManager: 'gradle' as const },
+    });
+
+    expect(plan.actions).toEqual([
+      expect.objectContaining({
+        packageManager: 'gradle',
+        packageName: 'lodash',
+        currentVersion: '4.17.15',
+        targetVersion: '4.17.21',
+        projectId: 'project',
+        evidence: 'snyk-rest-remedy',
+      }),
+    ]);
+  });
+
   it.each(['1.2', '1.2.3.4', '2024.1', '1.2.3.post1'])(
     'accepts the exact ecosystem version %s',
     (targetVersion) => {
