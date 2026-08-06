@@ -55,6 +55,7 @@ project IDs to enable scoped REST inventory.
 | `REMEDIATION_BRANCH_SUFFIX` | no | unset |
 | `PR_LABELS` | no | `security,dependencies,snyk,automated` |
 | `ISSUE_LABELS` | no | `security,snyk,ai-remediation` |
+| `ISSUE_MANAGEMENT_LABEL` | no | `snyk` |
 | `PR_REVIEWERS` | no | unset |
 | `PR_TEAM_REVIEWERS` | no | unset |
 

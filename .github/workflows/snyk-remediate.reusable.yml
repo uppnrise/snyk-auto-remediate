@@ -43,6 +43,10 @@ on:
         description: 'Comma-separated labels to apply to Issues'
         type: string
         default: 'security,snyk,ai-remediation'
+      issue-management-label:
+        description: 'Stable label used to reconcile Snyk-managed Issues'
+        type: string
+        default: 'snyk'
       pr-reviewers:
         description: 'Comma-separated GitHub usernames to request as PR reviewers'
         type: string
@@ -296,6 +300,7 @@ jobs:
           MAX_ISSUES_PER_RUN: ${{ inputs['max-issues-per-run'] }}
           PR_LABELS: ${{ inputs['pr-labels'] }}
           ISSUE_LABELS: ${{ inputs['issue-labels'] }}
+          ISSUE_MANAGEMENT_LABEL: ${{ inputs['issue-management-label'] }}
           PR_REVIEWERS: ${{ inputs['pr-reviewers'] }}
           PR_TEAM_REVIEWERS: ${{ inputs['pr-team-reviewers'] }}
           WORKING_DIRECTORY: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}

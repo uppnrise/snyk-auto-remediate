@@ -93,12 +93,17 @@ export class GitHubApiClient {
     return (await response.json()) as GitHubIssue;
   }
 
-  async listIssues(state: 'open' | 'closed' | 'all' = 'open'): Promise<GitHubIssue[]> {
+  async listIssues(
+    state: 'open' | 'closed' | 'all' = 'open',
+    labels: string[] = [],
+  ): Promise<GitHubIssue[]> {
     const allIssues: GitHubIssue[] = [];
     let page = 1;
 
     for (;;) {
-      const url = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/issues?state=${state}&per_page=100&page=${page}`;
+      const params = new URLSearchParams({ state, per_page: '100', page: String(page) });
+      if (labels.length > 0) params.set('labels', labels.join(','));
+      const url = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/issues?${params.toString()}`;
       const response = await githubFetchWithRetry(url, { headers: this.headers });
 
       if (!response.ok) {

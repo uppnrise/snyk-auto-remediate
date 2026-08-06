@@ -154,6 +154,7 @@ export interface RemediationConfig {
   testCommand?: string;
   prLabels: string[];
   issueLabels: string[];
+  issueManagementLabel: string;
   prReviewers?: string[];
   prTeamReviewers?: string[];
   targetBranch: string;
