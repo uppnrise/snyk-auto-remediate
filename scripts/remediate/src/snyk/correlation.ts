@@ -243,3 +243,9 @@ export function unresolvedFindingKeys(
   }
   return [...unresolved];
 }
+
+export function verifiedFindingIds(actions: RemediationAction[]): string[] {
+  return actions
+    .filter((action) => action.evidence === 'snyk-cli-upgrade-path')
+    .flatMap((action) => action.findingIds);
+}
