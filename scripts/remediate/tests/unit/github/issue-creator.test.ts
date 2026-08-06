@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildIssueReconciliation,
   createOrUpdateIssues,
+  selectManagementLabels,
 } from '../../../src/github/issue-creator.js';
 import type { RemediationConfig, SnykIssue } from '../../../src/snyk/types.js';
 
@@ -55,5 +56,10 @@ describe('fallback issue lifecycle', () => {
     ];
 
     expect(buildIssueReconciliation([issue], existing).toClose).toEqual([42]);
+  });
+
+  it('uses one stable management label instead of requiring every issue label', () => {
+    expect(selectManagementLabels(['security', 'snyk', 'ai-remediation'])).toEqual(['snyk']);
+    expect(selectManagementLabels(['security', 'automation'])).toEqual(['security']);
   });
 });
