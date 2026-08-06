@@ -104,6 +104,10 @@ export function loadConfig(): RemediationConfig {
   const prTeamReviewersList = parseListEnv('PR_TEAM_REVIEWERS', []);
   const testCommandValue = process.env['TEST_COMMAND'];
   const remediationBranchSuffix = process.env['REMEDIATION_BRANCH_SUFFIX'];
+  const issueManagementLabel = getEnv('ISSUE_MANAGEMENT_LABEL', 'snyk').trim();
+  if (!issueManagementLabel) {
+    throw new Error('ISSUE_MANAGEMENT_LABEL must not be empty');
+  }
 
   const base: RemediationConfig = {
     snykToken,
@@ -119,6 +123,7 @@ export function loadConfig(): RemediationConfig {
     runTests: parseBoolEnv('RUN_TESTS', true),
     prLabels: parseListEnv('PR_LABELS', ['security', 'dependencies', 'snyk', 'automated']),
     issueLabels: parseListEnv('ISSUE_LABELS', ['security', 'snyk', 'ai-remediation']),
+    issueManagementLabel,
     targetBranch: getEnv('TARGET_BRANCH', 'main'),
   };
   if (githubToken !== undefined) base.githubToken = githubToken;

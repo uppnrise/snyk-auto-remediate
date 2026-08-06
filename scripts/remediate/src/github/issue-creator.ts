@@ -5,6 +5,10 @@ import type { RemediationConfig, SnykIssue, Severity } from '../snyk/types.js';
 const FINDING_MARKER_PREFIX = '<!-- snyk-finding-id:';
 const FINDING_MARKER_SUFFIX = '-->';
 
+export function buildManagedIssueLabels(issueLabels: string[], managementLabel: string): string[] {
+  return [...new Set([...issueLabels, managementLabel])];
+}
+
 function buildFindingMarker(findingId: string): string {
   return `${FINDING_MARKER_PREFIX} ${findingId} ${FINDING_MARKER_SUFFIX}`;
 }
@@ -172,12 +176,19 @@ export async function createOrUpdateIssues(
   if (!config.githubToken) throw new Error('GITHUB_TOKEN is required to reconcile fallback issues');
   const client = new GitHubApiClient(config.githubToken, config.githubRepository);
 
-  // Ensure required labels exist
-  await ensureLabels(client, config.issueLabels);
+  const managedIssueLabels = buildManagedIssueLabels(
+    config.issueLabels,
+    config.issueManagementLabel,
+  );
 
-  // Fetch existing open issues to check for duplicates
-  logger.info('Fetching existing open issues to check for duplicates...');
-  const existingIssues = await client.listIssues('open');
+  // Ensure required labels exist
+  await ensureLabels(client, managedIssueLabels);
+
+  // Fetch only managed open issues to check for duplicates.
+  logger.info(
+    `Fetching existing open issues with management label ${config.issueManagementLabel} to check for duplicates...`,
+  );
+  const existingIssues = await client.listIssues('open', [config.issueManagementLabel]);
 
   const reconciliation = buildIssueReconciliation(unfixableIssues, existingIssues);
   for (const issueNumber of reconciliation.toClose) {
@@ -190,7 +201,7 @@ export async function createOrUpdateIssues(
 
   for (const issue of issuesToProcess) {
     const severity = issue.attributes.effective_severity_level;
-    const labels = [...config.issueLabels, `severity/${severity}`];
+    const labels = [...managedIssueLabels, `severity/${severity}`];
 
     const title = `[Snyk] ${issue.attributes.title}`;
     const body = buildIssueBody(issue, config);

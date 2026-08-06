@@ -37,6 +37,7 @@ describe('loadConfig', () => {
     expect(config.enableCopilotAgentFallback).toBe(true);
     expect(config.copilotAssignee).toBe('copilot');
     expect(config.failOnNoFix).toBe(false);
+    expect(config.issueManagementLabel).toBe('snyk');
   });
 
   it('should parse DRY_RUN=true', () => {
@@ -85,6 +86,18 @@ describe('loadConfig', () => {
     process.env['PR_LABELS'] = 'security,deps,snyk';
     const config = loadConfig();
     expect(config.prLabels).toEqual(['security', 'deps', 'snyk']);
+  });
+
+  it('should load an explicit fallback-issue management label', () => {
+    setRequiredEnv();
+    process.env['ISSUE_MANAGEMENT_LABEL'] = 'managed-by-snyk';
+    expect(loadConfig().issueManagementLabel).toBe('managed-by-snyk');
+  });
+
+  it('rejects an empty fallback-issue management label', () => {
+    setRequiredEnv();
+    process.env['ISSUE_MANAGEMENT_LABEL'] = '   ';
+    expect(() => loadConfig()).toThrow('ISSUE_MANAGEMENT_LABEL');
   });
 
   it('should parse SNYK_PROJECT_IDS as comma-separated list', () => {
