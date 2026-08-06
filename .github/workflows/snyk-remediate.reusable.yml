@@ -261,8 +261,10 @@ jobs:
           go-version: ${{ inputs['go-version'] }}
 
       # ── Snyk CLI ────────────────────────────────────────────────────────────
-      - name: Install Snyk CLI
-        run: npm install -g snyk@1.1306.1
+      - name: Set up Snyk CLI
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        with:
+          snyk-version: '1.1306.2'
 
       - name: Validate Snyk token and CLI
         env:
