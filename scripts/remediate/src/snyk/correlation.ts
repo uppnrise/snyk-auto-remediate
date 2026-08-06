@@ -3,6 +3,7 @@ import type {
   DetectedEcosystem,
   NonActionableFinding,
   RemediationAction,
+  PackageManager,
   Severity,
   SnykIssue,
 } from './types.js';
@@ -113,10 +114,41 @@ function actionFrom(issue: SnykIssue, cli: CliVulnerability): RemediationAction 
   };
 }
 
+function actionsFromRestRemedies(
+  issue: SnykIssue,
+  packageManager: PackageManager,
+): RemediationAction[] {
+  return (issue.attributes.coordinates ?? []).flatMap((coordinate) =>
+    (coordinate.remedies ?? []).flatMap((remedy): RemediationAction[] => {
+      const packageName = remedy.details?.upgrade_package;
+      const rawTarget = remedy.details?.target_version;
+      if (typeof packageName !== 'string' || typeof rawTarget !== 'string') return [];
+      const targetVersion = normalizeExactVersion(rawTarget);
+      const dependency = coordinate.representations
+        ?.map((representation) => representation.dependency)
+        .find((candidate) => candidate?.package_name === packageName);
+      const currentVersion = dependency && normalizeExactVersion(dependency.package_version);
+      if (!targetVersion || !currentVersion) return [];
+      return [
+        {
+          packageManager,
+          packageName,
+          currentVersion,
+          targetVersion,
+          findingIds: [issue.id],
+          findingKeys: [issue.attributes.key],
+          projectId: issue.relationships.scan_item.data.id,
+          evidence: 'snyk-rest-remedy',
+        },
+      ];
+    }),
+  );
+}
+
 export function buildRemediationPlan(
   issues: SnykIssue[],
   cliVulnerabilities: CliVulnerability[],
-  options: { scopedProjectIds?: string[] } = {},
+  options: { scopedProjectIds?: string[]; restPackageManager?: PackageManager } = {},
 ): { actions: RemediationAction[]; nonActionable: NonActionableFinding[] } {
   const actions: RemediationAction[] = [];
   const nonActionable: NonActionableFinding[] = [];
@@ -131,6 +163,22 @@ export function buildRemediationPlan(
       return v.projectName === projectId;
     });
     if (matches.length === 0) {
+      const restCandidates = options.restPackageManager
+        ? actionsFromRestRemedies(issue, options.restPackageManager)
+        : [];
+      const restSignatures = new Set(
+        restCandidates.map(
+          (action) => `${action.packageManager}:${action.packageName}:${action.targetVersion}`,
+        ),
+      );
+      if (restSignatures.size === 1 && restCandidates[0]) {
+        actions.push(restCandidates[0]);
+        continue;
+      }
+      if (restSignatures.size > 1) {
+        nonActionable.push({ issue, reason: 'ambiguous_upgrade_path' });
+        continue;
+      }
       nonActionable.push({
         issue,
         reason:

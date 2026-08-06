@@ -76,6 +76,7 @@ async function main(): Promise<void> {
 
   const plan = buildRemediationPlan(allIssues, cliFindings, {
     ...(config.snykProjectIds ? { scopedProjectIds: config.snykProjectIds } : {}),
+    ...(ecosystems.length === 1 ? { restPackageManager: ecosystems[0]!.packageManager } : {}),
   });
   const runtimeNonActionable = [...plan.nonActionable];
   const findingsById = new Map(allIssues.map((issue) => [issue.id, issue]));
@@ -122,9 +123,15 @@ async function main(): Promise<void> {
 
       const result = await fixer.applyFix(workingDir, relevantActions, findingsById, config.dryRun);
       if (result.success && !config.dryRun) {
+        const cliVerifiedActions = relevantActions.filter(
+          (action) => action.evidence === 'snyk-cli-upgrade-path',
+        );
         try {
-          const after = await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId);
-          const unverified = unresolvedFindingKeys(relevantActions, after);
+          const after =
+            cliVerifiedActions.length > 0
+              ? await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId)
+              : [];
+          const unverified = unresolvedFindingKeys(cliVerifiedActions, after);
           if (unverified.length > 0) {
             fixer.rollback();
             result.success = false;
