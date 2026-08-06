@@ -96,7 +96,9 @@ describe('GitHub Actions workflows', () => {
 
   it('pins the Snyk CLI and serializes remediation for the same target branch', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
-    expect(reusable).toContain('npm install -g snyk@1.1306.1');
+    expect(reusable).toContain('uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04');
+    expect(reusable).toContain("snyk-version: '1.1306.2'");
+    expect(reusable).not.toContain('npm install -g snyk');
     expect(reusable).toContain('concurrency:');
     expect(reusable).toContain('cancel-in-progress: false');
     expect(reusable).not.toContain('max-prs-per-run');
