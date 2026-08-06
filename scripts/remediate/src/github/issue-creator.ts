@@ -53,10 +53,13 @@ function severityColor(severity: Severity): string {
   return colors[severity];
 }
 
-function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
+export function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
   const attrs = issue.attributes;
   const severity = attrs.effective_severity_level;
   const marker = buildFindingMarker(issue.id);
+  const organizationId = issue.relationships.organization.data.id;
+  const projectId = issue.relationships.scan_item.data.id;
+  const projectUrl = `https://app.snyk.io/org/${encodeURIComponent(organizationId)}/project/${encodeURIComponent(projectId)}`;
 
   const problems = attrs.problems ?? [];
   const cves = problems.filter((p) => p.cve).map((p) => p.cve as string);
@@ -98,6 +101,7 @@ function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
 | Field | Value |
 |-------|-------|
 | **Snyk ID** | [\`${attrs.key}\`](${snykUrl}) |
+| **Snyk Project** | [\`${projectId}\`](${projectUrl}) |
 | **Severity** | ${severityColor(severity)} ${severity.toUpperCase()} |
 | **CVSS Score** | ${cvssScore != null ? cvssScore.toFixed(1) : 'N/A'} |
 | **CVE(s)** | ${cves.length > 0 ? cves.join(', ') : 'N/A'} |
