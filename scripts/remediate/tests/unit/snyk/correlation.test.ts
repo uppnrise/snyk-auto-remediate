@@ -3,6 +3,7 @@ import {
   buildRemediationPlan,
   normalizeCliOutput,
   unresolvedFindingKeys,
+  verifiedFindingIds,
 } from '../../../src/snyk/correlation.js';
 import type {
   CliVulnerability,
@@ -337,5 +338,26 @@ describe('CLI correlation', () => {
     expect(unresolvedFindingKeys([action], [remaining, withoutProject])).toEqual([
       issue.attributes.key,
     ]);
+  });
+
+  it('does not report REST-evidenced actions as verified by a CLI rescan', () => {
+    const cliAction: RemediationAction = {
+      packageManager: 'npm',
+      packageName: 'cli-package',
+      currentVersion: '1.0.0',
+      targetVersion: '2.0.0',
+      findingIds: ['cli-finding'],
+      findingKeys: ['SNYK-CLI'],
+      evidence: 'snyk-cli-upgrade-path',
+    };
+    const restAction: RemediationAction = {
+      ...cliAction,
+      packageName: 'rest-package',
+      findingIds: ['rest-finding'],
+      findingKeys: ['SNYK-REST'],
+      evidence: 'snyk-rest-remedy',
+    };
+
+    expect(verifiedFindingIds([cliAction, restAction])).toEqual(['cli-finding']);
   });
 });

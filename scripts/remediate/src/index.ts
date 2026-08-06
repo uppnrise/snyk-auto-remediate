@@ -23,7 +23,11 @@ import { prepareForSnykScan } from './utils/dependency-preparer.js';
 import type { FixResult, RemediationReport } from './snyk/types.js';
 import { scanWithSnykCli } from './snyk/cli-runner.js';
 import { loadIssueInventory } from './snyk/cli-inventory.js';
-import { buildRemediationPlan, unresolvedFindingKeys } from './snyk/correlation.js';
+import {
+  buildRemediationPlan,
+  unresolvedFindingKeys,
+  verifiedFindingIds,
+} from './snyk/correlation.js';
 import { resolve } from 'path';
 
 const FIXERS: BaseFixer[] = [
@@ -140,7 +144,7 @@ async function main(): Promise<void> {
             result.fixedFindings = [];
             result.changesApplied = [];
           } else {
-            result.verifiedFindingIds = relevantActions.flatMap((action) => action.findingIds);
+            result.verifiedFindingIds = verifiedFindingIds(relevantActions);
           }
         } catch (error) {
           fixer.rollback();
