@@ -4,10 +4,12 @@ import {
   normalizeCliOutput,
   unresolvedFindingKeys,
 } from '../../../src/snyk/correlation.js';
+import { verifiedFindingIds } from '../../../src/snyk/verification.js';
 import type {
   CliVulnerability,
   DetectedEcosystem,
   RemediationAction,
+  SnykCoordinate,
   SnykIssue,
 } from '../../../src/snyk/types.js';
 
@@ -218,6 +220,69 @@ describe('CLI correlation', () => {
     expect(plan.nonActionable[0]?.reason).toBe('missing_exact_target');
   });
 
+  it('builds an exact action from a REST remedy when local CLI evidence is unavailable', () => {
+    const restIssue = {
+      ...issue,
+      attributes: {
+        ...issue.attributes,
+        coordinates: [
+          {
+            remedies: [
+              {
+                type: 'upgrade',
+                details: { upgrade_package: 'lodash', target_version: '4.17.21' },
+              },
+            ],
+            representations: [
+              { dependency: { package_name: 'lodash', package_version: '4.17.15' } },
+            ],
+          },
+        ],
+      },
+    } as SnykIssue;
+
+    const plan = buildRemediationPlan([restIssue], [], {
+      ...{ restPackageManager: 'gradle' as const },
+    });
+
+    expect(plan.actions).toEqual([
+      expect.objectContaining({
+        packageManager: 'gradle',
+        packageName: 'lodash',
+        currentVersion: '4.17.15',
+        targetVersion: '4.17.21',
+        projectId: 'project',
+        evidence: 'snyk-rest-remedy',
+      }),
+    ]);
+  });
+
+  it('rejects REST remedies that disagree on the exact current version', () => {
+    const coordinate = (packageVersion: string): SnykCoordinate => ({
+      remedies: [
+        {
+          type: 'upgrade',
+          details: { upgrade_package: 'lodash', target_version: '4.17.21' },
+        },
+      ],
+      representations: [
+        { dependency: { package_name: 'lodash', package_version: packageVersion } },
+      ],
+    });
+    const restIssue = {
+      ...issue,
+      attributes: {
+        ...issue.attributes,
+        coordinates: [coordinate('4.17.14'), coordinate('4.17.15')],
+      },
+    } as SnykIssue;
+
+    const plan = buildRemediationPlan([restIssue], [], { restPackageManager: 'gradle' });
+
+    expect(plan.actions).toEqual([]);
+    expect(plan.nonActionable[0]?.reason).toBe('ambiguous_upgrade_path');
+  });
+
   it.each(['1.2', '1.2.3.4', '2024.1', '1.2.3.post1'])(
     'accepts the exact ecosystem version %s',
     (targetVersion) => {
@@ -300,5 +365,26 @@ describe('CLI correlation', () => {
     expect(unresolvedFindingKeys([action], [remaining, withoutProject])).toEqual([
       issue.attributes.key,
     ]);
+  });
+
+  it('does not report REST-evidenced actions as verified by a CLI rescan', () => {
+    const cliAction: RemediationAction = {
+      packageManager: 'npm',
+      packageName: 'cli-package',
+      currentVersion: '1.0.0',
+      targetVersion: '2.0.0',
+      findingIds: ['cli-finding'],
+      findingKeys: ['SNYK-CLI'],
+      evidence: 'snyk-cli-upgrade-path',
+    };
+    const restAction: RemediationAction = {
+      ...cliAction,
+      packageName: 'rest-package',
+      findingIds: ['rest-finding'],
+      findingKeys: ['SNYK-REST'],
+      evidence: 'snyk-rest-remedy',
+    };
+
+    expect(verifiedFindingIds([cliAction, restAction])).toEqual(['cli-finding']);
   });
 });

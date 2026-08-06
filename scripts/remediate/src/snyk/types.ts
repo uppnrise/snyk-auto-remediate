@@ -41,6 +41,11 @@ export interface SnykRemedy {
   description?: string;
   correlation_id?: string;
   meta?: Record<string, unknown>;
+  details?: {
+    upgrade_package?: unknown;
+    target_version?: unknown;
+    [key: string]: unknown;
+  };
 }
 export interface SnykCoordinate {
   remedies?: SnykRemedy[];
@@ -109,7 +114,7 @@ export interface RemediationAction {
   findingIds: string[];
   findingKeys: string[];
   projectId?: string;
-  evidence: 'snyk-cli-upgrade-path';
+  evidence: 'snyk-cli-upgrade-path' | 'snyk-rest-remedy';
 }
 export interface NonActionableFinding {
   issue: SnykIssue;
