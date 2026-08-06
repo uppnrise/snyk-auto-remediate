@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildCliInventory, loadIssueInventory } from '../../../src/snyk/cli-inventory.js';
+import {
+  buildCliInventory,
+  loadIssueInventory,
+  shouldCollectCliFindings,
+} from '../../../src/snyk/cli-inventory.js';
 import { SnykApiError } from '../../../src/snyk/api-client.js';
 import { buildRemediationPlan } from '../../../src/snyk/correlation.js';
 import type { CliVulnerability, RemediationConfig, SnykIssue } from '../../../src/snyk/types.js';
@@ -20,6 +24,11 @@ const upgradable: CliVulnerability = {
 };
 
 describe('CLI-only issue inventory', () => {
+  it('skips local CLI collection when REST projects explicitly scope the inventory', () => {
+    expect(shouldCollectCliFindings({ snykProjectIds: ['project-id'] })).toBe(false);
+    expect(shouldCollectCliFindings({})).toBe(true);
+  });
+
   it('creates stable REST-shaped findings that retain exact CLI remediation evidence', () => {
     const first = buildCliInventory([upgradable], 'org-id', 'high');
     const second = buildCliInventory([upgradable], 'org-id', 'high');
