@@ -76,6 +76,13 @@ describe('GitHub Actions workflows', () => {
     expect(reusable).toContain('::error::SNYK_TOKEN is required');
   });
 
+  it('passes an explicit stable label for fallback-issue reconciliation', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    expect(reusable).toContain('issue-management-label:');
+    expect(reusable).toContain("default: 'snyk'");
+    expect(reusable).toContain("ISSUE_MANAGEMENT_LABEL: ${{ inputs['issue-management-label'] }}");
+  });
+
   it('runs the complete validation suite for pull requests and pushes to master', () => {
     const ci = workflow('ci.yml');
     expect(ci).toContain('pull_request:');
