@@ -72,7 +72,9 @@ describe('CLI-only issue inventory', () => {
     const restFetcher = (): Promise<SnykIssue[]> =>
       Promise.reject(new Error('REST must not be called without an explicit project scope'));
 
-    await expect(loadIssueInventory(config, [upgradable], restFetcher)).resolves.toHaveLength(1);
+    await expect(loadIssueInventory(config, [upgradable], { restFetcher })).resolves.toHaveLength(
+      1,
+    );
   });
 
   it('falls back on REST 403 but keeps other scoped REST failures fatal', async () => {
@@ -86,10 +88,12 @@ describe('CLI-only issue inventory', () => {
     const unauthorized = (): Promise<SnykIssue[]> =>
       Promise.reject(new SnykApiError(401, 'Unauthorized'));
 
-    await expect(loadIssueInventory(config, [upgradable], forbidden)).resolves.toHaveLength(1);
-    await expect(loadIssueInventory(config, [upgradable], unauthorized)).rejects.toMatchObject({
-      status: 401,
-    });
+    await expect(
+      loadIssueInventory(config, [upgradable], { restFetcher: forbidden }),
+    ).resolves.toHaveLength(1);
+    await expect(
+      loadIssueInventory(config, [upgradable], { restFetcher: unauthorized }),
+    ).rejects.toMatchObject({ status: 401 });
   });
 
   it('collects CLI findings lazily when a scoped REST request is forbidden', async () => {
@@ -102,9 +106,12 @@ describe('CLI-only issue inventory', () => {
       Promise.reject(new SnykApiError(403, 'Forbidden'));
     let fallbackCalls = 0;
 
-    const inventory = await loadIssueInventory(config, [], forbidden, () => {
-      fallbackCalls++;
-      return Promise.resolve([upgradable]);
+    const inventory = await loadIssueInventory(config, [], {
+      restFetcher: forbidden,
+      cliFallbackLoader: () => {
+        fallbackCalls++;
+        return Promise.resolve([upgradable]);
+      },
     });
 
     expect(fallbackCalls).toBe(1);
