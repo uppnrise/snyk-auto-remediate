@@ -17,6 +17,12 @@ const severityRank: Record<Severity, number> = {
   critical: 4,
 };
 
+export function shouldCollectCliFindings(
+  config: Pick<RemediationConfig, 'snykProjectIds'>,
+): boolean {
+  return !config.snykProjectIds?.length;
+}
+
 function stableIssueId(finding: CliVulnerability): string {
   const identity = [
     finding.projectId ?? finding.projectName ?? finding.packageManager,
