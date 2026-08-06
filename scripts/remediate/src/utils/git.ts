@@ -38,27 +38,6 @@ export async function gitConfigureUser(
   await execCommand('git', ['config', 'user.email', email], { cwd: workingDirectory });
 }
 
-export async function gitCurrentBranch(workingDirectory: string): Promise<string> {
-  const result = await execCommand('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
-    cwd: workingDirectory,
-  });
-  return result.stdout.trim();
-}
-
-export async function gitBranchExists(
-  workingDirectory: string,
-  branchName: string,
-): Promise<boolean> {
-  try {
-    await execCommand('git', ['rev-parse', '--verify', branchName], {
-      cwd: workingDirectory,
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function buildRemediationBranchName(targetBranch: string, suffix?: string): string {
   const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '-');
   const safeSuffix = suffix?.replace(/[^a-zA-Z0-9_-]/g, '-');

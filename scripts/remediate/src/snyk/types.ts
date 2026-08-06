@@ -2,7 +2,7 @@ export type Severity = 'info' | 'low' | 'medium' | 'high' | 'critical';
 export type SeverityThreshold = Exclude<Severity, 'info'>;
 export type PackageManager =
   'npm' | 'yarn' | 'pnpm' | 'pip' | 'poetry' | 'maven' | 'gradle' | 'go' | 'composer';
-export type NonActionableReason =
+type NonActionableReason =
   | 'missing_coordinates'
   | 'cli_not_correlated'
   | 'project_not_correlated'
@@ -14,11 +14,11 @@ export type NonActionableReason =
   | 'verification_failed'
   | 'tests_failed';
 
-export interface ResourceIdentifier {
+interface ResourceIdentifier {
   id: string;
   type: string;
 }
-export interface SnykProblem {
+interface SnykProblem {
   id: string;
   source?: string;
   url?: string;
@@ -27,16 +27,16 @@ export interface SnykProblem {
   cvss_score?: number | null;
   cvss_vector?: string | null;
 }
-export interface SnykDependency {
+interface SnykDependency {
   package_name: string;
   package_version: string;
 }
-export interface SnykRepresentation {
+interface SnykRepresentation {
   resourcePath?: string;
   dependency?: SnykDependency;
   [key: string]: unknown;
 }
-export interface SnykRemedy {
+interface SnykRemedy {
   type: string;
   description?: string;
   correlation_id?: string;
@@ -58,7 +58,7 @@ export interface SnykCoordinate {
   is_upgradeable?: boolean;
   reachability?: string;
 }
-export interface SnykIssueAttributes {
+interface SnykIssueAttributes {
   key: string;
   title: string;
   type: string;
@@ -74,7 +74,7 @@ export interface SnykIssueAttributes {
   resolution?: Record<string, unknown>;
   [key: string]: unknown;
 }
-export interface SnykIssueRelationships {
+interface SnykIssueRelationships {
   organization: { data: ResourceIdentifier };
   scan_item: { data: ResourceIdentifier };
   ignore?: { data: ResourceIdentifier };
