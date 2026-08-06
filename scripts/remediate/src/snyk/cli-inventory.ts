@@ -17,6 +17,12 @@ const severityRank: Record<Severity, number> = {
   critical: 4,
 };
 
+export function shouldCollectCliFindings(
+  config: Pick<RemediationConfig, 'snykProjectIds'>,
+): boolean {
+  return !config.snykProjectIds?.length;
+}
+
 function stableIssueId(finding: CliVulnerability): string {
   const identity = [
     finding.projectId ?? finding.projectName ?? finding.packageManager,
@@ -77,10 +83,15 @@ export function buildCliInventory(
   return [...issues.values()];
 }
 
+interface IssueInventoryOptions {
+  restFetcher?: (config: RemediationConfig) => Promise<SnykIssue[]>;
+  cliFallbackLoader?: () => Promise<CliVulnerability[]>;
+}
+
 export async function loadIssueInventory(
   config: RemediationConfig,
   cliFindings: CliVulnerability[],
-  restFetcher: (config: RemediationConfig) => Promise<SnykIssue[]> = fetchSnykIssues,
+  options: IssueInventoryOptions = {},
 ): Promise<SnykIssue[]> {
   if (!config.snykProjectIds?.length) {
     logger.info(
@@ -89,12 +100,18 @@ export async function loadIssueInventory(
     return buildCliInventory(cliFindings, config.snykOrgId, config.severityThreshold);
   }
   try {
-    return await restFetcher(config);
+    return await (options.restFetcher ?? fetchSnykIssues)(config);
   } catch (error) {
     if (!(error instanceof SnykApiError) || error.status !== 403) throw error;
     logger.warn(
       'Snyk REST issue inventory is forbidden; using local CLI-only inventory for detected projects',
     );
-    return buildCliInventory(cliFindings, config.snykOrgId, config.severityThreshold);
+    const fallbackFindings =
+      cliFindings.length > 0
+        ? cliFindings
+        : options.cliFallbackLoader
+          ? await options.cliFallbackLoader()
+          : [];
+    return buildCliInventory(fallbackFindings, config.snykOrgId, config.severityThreshold);
   }
 }

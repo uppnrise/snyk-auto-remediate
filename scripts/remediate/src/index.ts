@@ -20,9 +20,9 @@ import {
 } from './utils/git.js';
 import { runPostFixTests } from './utils/test-runner.js';
 import { prepareForSnykScan } from './utils/dependency-preparer.js';
-import type { FixResult, RemediationReport } from './snyk/types.js';
+import type { CliVulnerability, FixResult, RemediationReport } from './snyk/types.js';
 import { scanWithSnykCli } from './snyk/cli-runner.js';
-import { loadIssueInventory } from './snyk/cli-inventory.js';
+import { loadIssueInventory, shouldCollectCliFindings } from './snyk/cli-inventory.js';
 import { buildRemediationPlan, unresolvedFindingKeys } from './snyk/correlation.js';
 import { resolve } from 'path';
 import { verifiedFindingIds } from './snyk/verification.js';
@@ -54,24 +54,36 @@ async function main(): Promise<void> {
 
   // 1. Detect ecosystems and obtain exact remediation evidence from local CLI scans.
   const ecosystems = detectEcosystems(workingDir, config.packageManagers);
-  const cliFindings = (
-    await Promise.all(
-      ecosystems.map(async (ecosystem) => {
-        try {
-          await prepareForSnykScan(ecosystem);
-          return await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId);
-        } catch (error) {
-          errors.push(`Snyk CLI scan failed for ${ecosystem.packageManager}: ${String(error)}`);
-          return [];
-        }
-      }),
-    )
-  ).flat();
+  const collectCliFindings = async (): Promise<CliVulnerability[]> =>
+    (
+      await Promise.all(
+        ecosystems.map(async (ecosystem) => {
+          try {
+            await prepareForSnykScan(ecosystem);
+            return await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId);
+          } catch (error) {
+            errors.push(`Snyk CLI scan failed for ${ecosystem.packageManager}: ${String(error)}`);
+            return [];
+          }
+        }),
+      )
+    ).flat();
+  let cliFindings: CliVulnerability[] = [];
+  if (shouldCollectCliFindings(config)) {
+    cliFindings = await collectCliFindings();
+  } else {
+    logger.info('SNYK_PROJECT_IDS configured — skipping local scans and using REST API inventory');
+  }
 
   // 2. Prefer organization REST inventory, but retain a local CLI-only mode for plans without
   // API entitlement. Authentication and all other REST failures remain fatal.
   logger.info('Fetching Snyk issues...');
-  let allIssues = await loadIssueInventory(config, cliFindings);
+  let allIssues = await loadIssueInventory(config, cliFindings, {
+    cliFallbackLoader: async () => {
+      cliFindings = await collectCliFindings();
+      return cliFindings;
+    },
+  });
   allIssues = deduplicateIssues(allIssues);
   logger.info(`Total unique issues: ${allIssues.length}`);
 
