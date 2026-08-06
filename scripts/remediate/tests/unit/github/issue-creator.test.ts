@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildIssueBody,
   buildIssueReconciliation,
   createOrUpdateIssues,
 } from '../../../src/github/issue-creator.js';
@@ -31,6 +32,13 @@ const config = {
 } as RemediationConfig;
 
 describe('fallback issue lifecycle', () => {
+  it('identifies the originating Snyk project in the issue body', () => {
+    const body = buildIssueBody(issue, config);
+
+    expect(body).toContain('`project`');
+    expect(body).toContain('https://app.snyk.io/org/org/project/project');
+  });
+
   it('reports planned work without claiming issues were created during dry-run', async () => {
     await expect(createOrUpdateIssues([issue], config)).resolves.toEqual({
       created: 0,
