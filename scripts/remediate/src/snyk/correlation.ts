@@ -168,7 +168,8 @@ export function buildRemediationPlan(
         : [];
       const restSignatures = new Set(
         restCandidates.map(
-          (action) => `${action.packageManager}:${action.packageName}:${action.targetVersion}`,
+          (action) =>
+            `${action.packageManager}:${action.packageName}:${action.currentVersion}:${action.targetVersion}`,
         ),
       );
       if (restSignatures.size === 1 && restCandidates[0]) {
@@ -242,10 +243,4 @@ export function unresolvedFindingKeys(
     }
   }
   return [...unresolved];
-}
-
-export function verifiedFindingIds(actions: RemediationAction[]): string[] {
-  return actions
-    .filter((action) => action.evidence === 'snyk-cli-upgrade-path')
-    .flatMap((action) => action.findingIds);
 }
