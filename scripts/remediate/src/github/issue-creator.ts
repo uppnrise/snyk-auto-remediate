@@ -5,10 +5,8 @@ import type { RemediationConfig, SnykIssue, Severity } from '../snyk/types.js';
 const FINDING_MARKER_PREFIX = '<!-- snyk-finding-id:';
 const FINDING_MARKER_SUFFIX = '-->';
 
-export function selectManagementLabels(issueLabels: string[]): string[] {
-  const managementLabel =
-    issueLabels.find((label) => label.toLowerCase() === 'snyk') ?? issueLabels[0];
-  return managementLabel ? [managementLabel] : [];
+export function buildManagedIssueLabels(issueLabels: string[], managementLabel: string): string[] {
+  return [...new Set([...issueLabels, managementLabel])];
 }
 
 function buildFindingMarker(findingId: string): string {
@@ -178,15 +176,19 @@ export async function createOrUpdateIssues(
   if (!config.githubToken) throw new Error('GITHUB_TOKEN is required to reconcile fallback issues');
   const client = new GitHubApiClient(config.githubToken, config.githubRepository);
 
+  const managedIssueLabels = buildManagedIssueLabels(
+    config.issueLabels,
+    config.issueManagementLabel,
+  );
+
   // Ensure required labels exist
-  await ensureLabels(client, config.issueLabels);
+  await ensureLabels(client, managedIssueLabels);
 
   // Fetch only managed open issues to check for duplicates.
-  const managementLabels = selectManagementLabels(config.issueLabels);
   logger.info(
-    `Fetching existing open issues with management label ${managementLabels.join(', ')} to check for duplicates...`,
+    `Fetching existing open issues with management label ${config.issueManagementLabel} to check for duplicates...`,
   );
-  const existingIssues = await client.listIssues('open', managementLabels);
+  const existingIssues = await client.listIssues('open', [config.issueManagementLabel]);
 
   const reconciliation = buildIssueReconciliation(unfixableIssues, existingIssues);
   for (const issueNumber of reconciliation.toClose) {
@@ -199,7 +201,7 @@ export async function createOrUpdateIssues(
 
   for (const issue of issuesToProcess) {
     const severity = issue.attributes.effective_severity_level;
-    const labels = [...config.issueLabels, `severity/${severity}`];
+    const labels = [...managedIssueLabels, `severity/${severity}`];
 
     const title = `[Snyk] ${issue.attributes.title}`;
     const body = buildIssueBody(issue, config);
