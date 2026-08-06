@@ -91,4 +91,23 @@ describe('CLI-only issue inventory', () => {
       status: 401,
     });
   });
+
+  it('collects CLI findings lazily when a scoped REST request is forbidden', async () => {
+    const config = {
+      snykOrgId: 'org-id',
+      snykProjectIds: ['project-id'],
+      severityThreshold: 'high',
+    } as RemediationConfig;
+    const forbidden = (): Promise<SnykIssue[]> =>
+      Promise.reject(new SnykApiError(403, 'Forbidden'));
+    let fallbackCalls = 0;
+
+    const inventory = await loadIssueInventory(config, [], forbidden, () => {
+      fallbackCalls++;
+      return Promise.resolve([upgradable]);
+    });
+
+    expect(fallbackCalls).toBe(1);
+    expect(inventory).toHaveLength(1);
+  });
 });

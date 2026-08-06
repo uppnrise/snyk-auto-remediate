@@ -87,6 +87,7 @@ export async function loadIssueInventory(
   config: RemediationConfig,
   cliFindings: CliVulnerability[],
   restFetcher: (config: RemediationConfig) => Promise<SnykIssue[]> = fetchSnykIssues,
+  cliFallbackLoader: () => Promise<CliVulnerability[]> = () => Promise.resolve(cliFindings),
 ): Promise<SnykIssue[]> {
   if (!config.snykProjectIds?.length) {
     logger.info(
@@ -101,6 +102,7 @@ export async function loadIssueInventory(
     logger.warn(
       'Snyk REST issue inventory is forbidden; using local CLI-only inventory for detected projects',
     );
-    return buildCliInventory(cliFindings, config.snykOrgId, config.severityThreshold);
+    const fallbackFindings = cliFindings.length > 0 ? cliFindings : await cliFallbackLoader();
+    return buildCliInventory(fallbackFindings, config.snykOrgId, config.severityThreshold);
   }
 }

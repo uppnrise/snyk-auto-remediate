@@ -54,9 +54,8 @@ async function main(): Promise<void> {
 
   // 1. Detect ecosystems and obtain exact remediation evidence from local CLI scans.
   const ecosystems = detectEcosystems(workingDir, config.packageManagers);
-  let cliFindings: CliVulnerability[] = [];
-  if (shouldCollectCliFindings(config)) {
-    cliFindings = (
+  const collectCliFindings = async (): Promise<CliVulnerability[]> =>
+    (
       await Promise.all(
         ecosystems.map(async (ecosystem) => {
           try {
@@ -69,6 +68,9 @@ async function main(): Promise<void> {
         }),
       )
     ).flat();
+  let cliFindings: CliVulnerability[] = [];
+  if (shouldCollectCliFindings(config)) {
+    cliFindings = await collectCliFindings();
   } else {
     logger.info('SNYK_PROJECT_IDS configured — skipping local scans and using REST API inventory');
   }
@@ -76,7 +78,10 @@ async function main(): Promise<void> {
   // 2. Prefer organization REST inventory, but retain a local CLI-only mode for plans without
   // API entitlement. Authentication and all other REST failures remain fatal.
   logger.info('Fetching Snyk issues...');
-  let allIssues = await loadIssueInventory(config, cliFindings);
+  let allIssues = await loadIssueInventory(config, cliFindings, undefined, async () => {
+    cliFindings = await collectCliFindings();
+    return cliFindings;
+  });
   allIssues = deduplicateIssues(allIssues);
   logger.info(`Total unique issues: ${allIssues.length}`);
 
