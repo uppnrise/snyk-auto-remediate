@@ -3,7 +3,7 @@ import { join } from 'path';
 import type { SnykIssue } from '../snyk/types.js';
 import { logger } from '../utils/logger.js';
 
-export interface SarifResult {
+interface SarifResult {
   ruleId: string;
   level: 'error' | 'warning' | 'note' | 'none';
   message: { text: string };
@@ -21,7 +21,7 @@ export interface SarifLog {
   runs: SarifRun[];
 }
 
-export interface SarifRun {
+interface SarifRun {
   tool: {
     driver: {
       name: string;
@@ -33,7 +33,7 @@ export interface SarifRun {
   results: SarifResult[];
 }
 
-export interface SarifRule {
+interface SarifRule {
   id: string;
   name: string;
   shortDescription: { text: string };
