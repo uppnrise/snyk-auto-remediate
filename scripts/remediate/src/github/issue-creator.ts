@@ -175,9 +175,11 @@ export async function createOrUpdateIssues(
   // Ensure required labels exist
   await ensureLabels(client, config.issueLabels);
 
-  // Fetch existing open issues to check for duplicates
-  logger.info('Fetching existing open issues to check for duplicates...');
-  const existingIssues = await client.listIssues('open');
+  // Fetch only managed open issues to check for duplicates.
+  logger.info(
+    `Fetching existing open issues with labels ${config.issueLabels.join(', ')} to check for duplicates...`,
+  );
+  const existingIssues = await client.listIssues('open', config.issueLabels);
 
   const reconciliation = buildIssueReconciliation(unfixableIssues, existingIssues);
   for (const issueNumber of reconciliation.toClose) {
