@@ -26,6 +26,7 @@ export async function scanWithSnykCli(
     '--json',
     `--package-manager=${CLI_PACKAGE_MANAGER[ecosystem.packageManager]}`,
   ];
+  if (ecosystem.packageManager === 'gradle') args.push('--all-sub-projects');
   if (snykOrgId && snykOrgId !== 'local-cli') args.push(`--org=${snykOrgId}`);
   let stdout: string;
   try {
