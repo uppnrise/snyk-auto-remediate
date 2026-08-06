@@ -5,6 +5,12 @@ import type { RemediationConfig, SnykIssue, Severity } from '../snyk/types.js';
 const FINDING_MARKER_PREFIX = '<!-- snyk-finding-id:';
 const FINDING_MARKER_SUFFIX = '-->';
 
+export function selectManagementLabels(issueLabels: string[]): string[] {
+  const managementLabel =
+    issueLabels.find((label) => label.toLowerCase() === 'snyk') ?? issueLabels[0];
+  return managementLabel ? [managementLabel] : [];
+}
+
 function buildFindingMarker(findingId: string): string {
   return `${FINDING_MARKER_PREFIX} ${findingId} ${FINDING_MARKER_SUFFIX}`;
 }
@@ -176,10 +182,11 @@ export async function createOrUpdateIssues(
   await ensureLabels(client, config.issueLabels);
 
   // Fetch only managed open issues to check for duplicates.
+  const managementLabels = selectManagementLabels(config.issueLabels);
   logger.info(
-    `Fetching existing open issues with labels ${config.issueLabels.join(', ')} to check for duplicates...`,
+    `Fetching existing open issues with management label ${managementLabels.join(', ')} to check for duplicates...`,
   );
-  const existingIssues = await client.listIssues('open', config.issueLabels);
+  const existingIssues = await client.listIssues('open', managementLabels);
 
   const reconciliation = buildIssueReconciliation(unfixableIssues, existingIssues);
   for (const issueNumber of reconciliation.toClose) {
