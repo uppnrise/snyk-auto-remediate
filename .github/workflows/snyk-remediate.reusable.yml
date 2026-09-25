@@ -262,12 +262,13 @@ jobs:
 
       # ── Snyk CLI ────────────────────────────────────────────────────────────
       # Pinned CLI binaries get pruned from Snyk's CDN over time (e.g. 1.1306.2
-      # started returning 403s), breaking this scheduled workflow. Track
-      # "latest" instead so the job keeps working without manual version bumps.
+      # started returning 403s), breaking this scheduled workflow. Track the
+      # "stable" channel instead so the job keeps working without manual
+      # version bumps, while avoiding the bleeding-edge "latest" release.
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         with:
-          snyk-version: 'latest'
+          snyk-version: 'stable'
 
       - name: Validate Snyk token and CLI
         env:
@@ -337,3 +338,66 @@ jobs:
             ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif
           if-no-files-found: ignore
           retention-days: 30
+
+  # ── Failure alerting ────────────────────────────────────────────────────────
+  # Scheduled workflow failures are easy to miss unless someone checks the
+  # Actions tab. Surface them as a labeled, deduplicated GitHub Issue instead,
+  # and close it automatically once the workflow succeeds again.
+  alert-on-failure:
+    name: Alert on remediation failure
+    needs: [prepare, remediate]
+    if: failure()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update failure alert issue
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          ALERT_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_ID: ${{ inputs['report-id'] }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          marker="<!-- snyk-remediation-workflow-failure:${REPORT_ID} -->"
+
+          gh label create "automation-failure" --repo "$ALERT_REPOSITORY" --color "b60205" \
+            --description "Automated CI/CD workflow failure alert" --force >/dev/null 2>&1 || true
+
+          existing="$(gh issue list --repo "$ALERT_REPOSITORY" --label "automation-failure" --state open \
+            --json number,body --jq ".[] | select(.body // \"\" | contains(\"$marker\")) | .number" | head -n1)"
+
+          # shellcheck disable=SC2016 # backticks below are literal Markdown code formatting, not command substitution
+          body="$(printf '%s\n\n## 🔴 Snyk Auto-Remediation workflow failed\n\nThe Snyk Auto-Remediation workflow (report-id: `%s`) failed.\n\n- **Failed run:** %s\n- **Triggered by:** `%s`\n\nThis issue was opened automatically and will be closed automatically the next time the workflow succeeds.\n' "$marker" "$REPORT_ID" "$RUN_URL" "$EVENT_NAME")"
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$ALERT_REPOSITORY" --body "🔁 Still failing: $RUN_URL"
+          else
+            gh issue create --repo "$ALERT_REPOSITORY" \
+              --title "🔴 Snyk Auto-Remediation workflow failing (report-id: $REPORT_ID)" \
+              --body "$body" --label "automation-failure"
+          fi
+
+  close-failure-alert:
+    name: Close failure alert on success
+    needs: [prepare, remediate]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close failure alert issue if present
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          ALERT_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPORT_ID: ${{ inputs['report-id'] }}
+        run: |
+          set -euo pipefail
+          marker="<!-- snyk-remediation-workflow-failure:${REPORT_ID} -->"
+
+          existing="$(gh issue list --repo "$ALERT_REPOSITORY" --label "automation-failure" --state open \
+            --json number,body --jq ".[] | select(.body // \"\" | contains(\"$marker\")) | .number" | head -n1)"
+
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --repo "$ALERT_REPOSITORY" \
+              --body "✅ Resolved — the workflow succeeded: $RUN_URL"
+            gh issue close "$existing" --repo "$ALERT_REPOSITORY"
+          fi

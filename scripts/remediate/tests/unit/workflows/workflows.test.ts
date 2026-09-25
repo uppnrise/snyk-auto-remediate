@@ -97,11 +97,31 @@ describe('GitHub Actions workflows', () => {
   it('pins the Snyk CLI action and serializes remediation for the same target branch', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain('uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04');
-    expect(reusable).toContain("snyk-version: 'latest'");
+    expect(reusable).toContain("snyk-version: 'stable'");
     expect(reusable).not.toContain('npm install -g snyk');
     expect(reusable).toContain('concurrency:');
     expect(reusable).toContain('cancel-in-progress: false');
     expect(reusable).not.toContain('max-prs-per-run');
     expect(workflow('snyk-remediate.yml')).not.toContain('max-prs-per-run');
+  });
+
+  it('alerts via a deduplicated GitHub Issue on failure and auto-closes it on success', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    expect(reusable).toContain('alert-on-failure:');
+    expect(reusable).toContain('needs: [prepare, remediate]');
+    expect(reusable).toContain('if: failure()');
+    expect(reusable).toContain('close-failure-alert:');
+    expect(reusable).toContain('if: success()');
+    expect(reusable).toContain('automation-failure');
+    expect(reusable).toContain('snyk-remediation-workflow-failure:');
+    expect(reusable).toContain('gh issue create --repo "$ALERT_REPOSITORY"');
+    expect(reusable).toContain('gh issue close "$existing" --repo "$ALERT_REPOSITORY"');
+  });
+
+  it('runs a secret-free Snyk CLI install smoke test on every CI run', () => {
+    const ci = workflow('ci.yml');
+    expect(ci).toContain('snyk-cli-smoke-test:');
+    expect(ci).toContain("snyk-version: 'stable'");
+    expect(ci).toContain('run: snyk --version');
   });
 });
