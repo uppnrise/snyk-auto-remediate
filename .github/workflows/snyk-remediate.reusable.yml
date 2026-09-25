@@ -261,10 +261,13 @@ jobs:
           go-version: ${{ inputs['go-version'] }}
 
       # ── Snyk CLI ────────────────────────────────────────────────────────────
+      # Pinned CLI binaries get pruned from Snyk's CDN over time (e.g. 1.1306.2
+      # started returning 403s), breaking this scheduled workflow. Track
+      # "latest" instead so the job keeps working without manual version bumps.
       - name: Set up Snyk CLI
         uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
         with:
-          snyk-version: '1.1306.2'
+          snyk-version: 'latest'
 
       - name: Validate Snyk token and CLI
         env:
