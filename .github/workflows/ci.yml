@@ -50,3 +50,15 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  snyk-cli-smoke-test:
+    name: Snyk CLI install smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Snyk CLI (stable channel)
+        uses: snyk/actions/setup@9adf32b1121593767fc3c057af55b55db032dc04 # v1.0.0
+        with:
+          snyk-version: 'stable'
+
+      - name: Verify Snyk CLI installed
+        run: snyk --version
