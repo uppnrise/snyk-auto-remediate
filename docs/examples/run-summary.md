@@ -2,11 +2,11 @@ This is an illustrative dry-run report, not a live scan.
 
 # 🔒 Snyk Auto-Remediation Summary
 
-> **Repository:** `owner/example`  
-> **Target Branch:** `main`  
-> **Run Timestamp:** 2026-10-10T00:00:00.000Z  
-> **Severity Threshold:** `high`  
-> **Dry Run:** ✅ Yes  
+> **Repository:** `owner/example`<br>
+> **Target Branch:** `main`<br>
+> **Run Timestamp:** 2026-10-10T00:00:00.000Z<br>
+> **Severity Threshold:** `high`<br>
+> **Dry Run:** ✅ Yes<br>
 
 ## 📊 Summary
 
