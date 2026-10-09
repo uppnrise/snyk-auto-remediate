@@ -1,6 +1,13 @@
 import { execCommand } from './exec.js';
 import { logger } from './logger.js';
 
+export async function gitProjectDirectory(workingDirectory: string): Promise<string> {
+  const result = await execCommand('git', ['rev-parse', '--show-prefix'], {
+    cwd: workingDirectory,
+  });
+  return result.stdout.trim().replace(/\/$/, '') || '.';
+}
+
 export async function gitAddAll(workingDirectory: string): Promise<void> {
   await execCommand('git', ['add', '-A'], { cwd: workingDirectory });
 }

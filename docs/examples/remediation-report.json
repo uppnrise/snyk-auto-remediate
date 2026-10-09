@@ -1,0 +1,130 @@
+{
+  "timestamp": "2026-10-10T00:00:00.000Z",
+  "repository": "owner/example",
+  "targetBranch": "main",
+  "severityThreshold": "high",
+  "totalFindings": 3,
+  "fixableFindings": 2,
+  "fixedFindings": 0,
+  "unfixableFindings": 1,
+  "dryRun": true,
+  "fixResults": [
+    {
+      "success": true,
+      "packageManager": "npm",
+      "fixedFindings": [
+        {
+          "id": "illustrative-finding-a",
+          "type": "issue",
+          "attributes": {
+            "key": "SNYK-DEMO-A",
+            "title": "Illustrative finding a",
+            "type": "package_vulnerability",
+            "created_at": "2026-10-10T00:00:00.000Z",
+            "updated_at": "2026-10-10T00:00:00.000Z",
+            "effective_severity_level": "high",
+            "status": "open",
+            "ignored": false
+          },
+          "relationships": {
+            "organization": {
+              "data": {
+                "id": "local-cli",
+                "type": "organization"
+              }
+            },
+            "scan_item": {
+              "data": {
+                "id": "example",
+                "type": "project"
+              }
+            }
+          }
+        },
+        {
+          "id": "illustrative-finding-b",
+          "type": "issue",
+          "attributes": {
+            "key": "SNYK-DEMO-B",
+            "title": "Illustrative finding b",
+            "type": "package_vulnerability",
+            "created_at": "2026-10-10T00:00:00.000Z",
+            "updated_at": "2026-10-10T00:00:00.000Z",
+            "effective_severity_level": "high",
+            "status": "open",
+            "ignored": false
+          },
+          "relationships": {
+            "organization": {
+              "data": {
+                "id": "local-cli",
+                "type": "organization"
+              }
+            },
+            "scan_item": {
+              "data": {
+                "id": "example",
+                "type": "project"
+              }
+            }
+          }
+        }
+      ],
+      "failedFindings": [],
+      "changesApplied": [
+        "Would update example-package-a: 1.0.0 -> 2.0.0",
+        "Would update example-package-b: 1.0.0 -> 2.0.0"
+      ],
+      "attemptedActions": [
+        {
+          "packageManager": "npm",
+          "packageName": "example-package-a",
+          "currentVersion": "1.0.0",
+          "targetVersion": "2.0.0",
+          "findingIds": [
+            "illustrative-finding-a"
+          ],
+          "findingKeys": [
+            "SNYK-DEMO-A"
+          ],
+          "projectId": "example",
+          "evidence": "snyk-cli-upgrade-path"
+        },
+        {
+          "packageManager": "npm",
+          "packageName": "example-package-b",
+          "currentVersion": "1.0.0",
+          "targetVersion": "2.0.0",
+          "findingIds": [
+            "illustrative-finding-b"
+          ],
+          "findingKeys": [
+            "SNYK-DEMO-B"
+          ],
+          "projectId": "example",
+          "evidence": "snyk-cli-upgrade-path"
+        }
+      ]
+    }
+  ],
+  "issuesCreated": 0,
+  "issuesPlanned": 1,
+  "issuesUpdated": 0,
+  "issuesClosed": 0,
+  "prsCreated": 0,
+  "errors": [],
+  "actionableFindings": 2,
+  "ambiguousFindings": 0,
+  "unsupportedFindings": 0,
+  "attemptedFindings": 2,
+  "verifiedFixedFindings": 0,
+  "verificationFailedFindings": 0,
+  "fallbackFindings": 1,
+  "nonActionable": [
+    {
+      "id": "illustrative-finding",
+      "key": "SNYK-DEMO-1",
+      "reason": "missing_exact_target"
+    }
+  ]
+}

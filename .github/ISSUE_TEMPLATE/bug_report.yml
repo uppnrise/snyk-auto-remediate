@@ -1,0 +1,28 @@
+name: Bug report
+description: Report incorrect remediation or workflow behavior
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: For vulnerabilities in this toolkit, use the private reporting link instead. Remove tokens and confidential scan data before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: Engine tag or commit SHA
+      description: Include the reusable workflow reference if different.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and expected behavior
+      description: Include sanitized workflow inputs, package manager, CLI version, and reproduction steps.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and evidence
+      description: Include the failed step, sanitized logs/report, or a public run URL. State whether this was dry-run or a mutating run.
+    validations:
+      required: true
