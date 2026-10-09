@@ -9,7 +9,7 @@ The TypeScript engine used by the repository's reusable GitHub Actions workflow.
 - Git
 - The package managers used by the target project
 
-The reusable workflow installs a pinned Snyk CLI and the required language toolchains. For local
+The reusable workflow installs Snyk CLI from its floating `stable` channel and the required language toolchains. For local
 execution, install the Snyk CLI separately.
 
 ## Run locally
@@ -31,6 +31,10 @@ mutate pull requests and issues.
 Without `SNYK_PROJECT_IDS`, inventory comes exclusively from the checked-out repository's CLI
 scan, and `SNYK_ORG_ID` is optional. Set both `SNYK_ORG_ID` and a comma-separated list of exact
 project IDs to enable scoped REST inventory.
+Scoped REST mode skips initial local scans and can apply unambiguous exact REST remedies for a
+single detected ecosystem. These actions are not CLI-re-scanned or counted as verified fixes.
+Only CLI-evidenced actions receive post-change CLI verification. A REST `403` attempts local CLI
+fallback; other REST failures remain fatal.
 
 ## Environment variables
 
@@ -81,6 +85,18 @@ Reports are written to `WORKING_DIRECTORY`:
 - the GitHub step summary when `GITHUB_STEP_SUMMARY` is set
 
 Dry-run reporting distinguishes planned issue work from created, updated, and closed issues.
+Scans and package preparation still execute during dry-run; GitHub and git mutations are skipped.
+Use a disposable target checkout for local execution.
+
+Fallback issue scope uses the Git repository-relative project directory, target branch,
+`REMEDIATION_BRANCH_SUFFIX` (the workflow's `report-id`, defaulting to `scan`), organization/project
+scope, severity threshold, and package-manager allow-list. Keep these values stable between runs.
+Old issues without a scope marker and issues from other scopes are preserved.
+Failed or partial inventory, no supported ecosystem, failed tests, and push/PR errors skip issue
+reconciliation. Review old issues manually after a complete successful scoped run.
+
+The workflow uploads SARIF only after a successful engine step; failed-run artifacts remain
+available for troubleshooting.
 
 ## Validation
 
@@ -92,3 +108,8 @@ npm run format:check
 npm run test:coverage
 npm audit --audit-level=moderate
 ```
+
+Coverage includes `src/engine.ts`; `src/index.ts` only adapts the result to a process exit code.
+The orchestration tests mock Snyk/GitHub and package-manager/git mutations, and use real temporary
+manifests and reports. They do not establish live compatibility with every package manager.
+See the root [roadmap](../../ROADMAP.md) for release-candidate validation work.
