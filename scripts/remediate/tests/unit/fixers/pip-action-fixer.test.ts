@@ -65,6 +65,75 @@ describe('pip manifest updates outside dry-run', () => {
     expect(readFileSync(file, 'utf8')).toBe('zopeXinterface==2.0.0\nzope.interface==2.1.0\n');
   });
 
+  it.each(['snyk-cli-upgrade-path', 'snyk-rest-remedy'] as const)(
+    'rejects conditional declarations without changing either platform (%s)',
+    async (evidence) => {
+      const file = join(directory, 'requirements.txt');
+      const before =
+        'requests==2.32.0 ; sys_platform == "win32"\nrequests==2.0.0 ; sys_platform == "linux"\n';
+      writeFileSync(file, before);
+      const result = await new ExactActionFixer('pip').applyFix(
+        directory,
+        [{ ...action, targetVersion: '2.31.0', evidence }],
+        new Map(),
+        false,
+      );
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('unsupported_manifest_shape');
+      expect(readFileSync(file, 'utf8')).toBe(before);
+      expect(execCommand).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    'requests==2.0.0 ; sys_platform == "win32"\nrequests==2.0.0 ; sys_platform == "linux"\n',
+    'requests @ https://example.test/requests.whl ; sys_platform == "win32"\nrequests==2.0.0 ; sys_platform == "linux"\n',
+    'requests==2.0.0 ; sys_platform == "linux"\nrequests[security]>=2.32.0 ; sys_platform == "win32"\n',
+  ])('preserves repeated declarations including unsupported shapes: %s', async (before) => {
+    const file = join(directory, 'requirements.txt');
+    writeFileSync(file, before);
+    const result = await new ExactActionFixer('pip').applyFix(
+      directory,
+      [action],
+      new Map(),
+      false,
+    );
+    expect(result.success).toBe(false);
+    expect(readFileSync(file, 'utf8')).toBe(before);
+    expect(execCommand).not.toHaveBeenCalled();
+  });
+
+  it('does not treat comments or similarly named packages as repeated declarations', async () => {
+    const file = join(directory, 'requirements.txt');
+    const before =
+      '# requests==2.32.0\nrequests-extra==2.32.0\nrequests==2.0.0 ; sys_platform == "linux"\n';
+    writeFileSync(file, before);
+    const result = await new ExactActionFixer('pip').applyFix(
+      directory,
+      [action],
+      new Map(),
+      false,
+    );
+    expect(result.success).toBe(true);
+    expect(readFileSync(file, 'utf8')).toBe(before.replace('requests==2.0.0', 'requests==2.1.0'));
+  });
+
+  it('recognizes equivalent package names when checking for repeated declarations', async () => {
+    const file = join(directory, 'requirements.txt');
+    const before =
+      'zope-interface==2.32.0 ; sys_platform == "win32"\nzope.interface==2.0.0 ; sys_platform == "linux"\n';
+    writeFileSync(file, before);
+    const result = await new ExactActionFixer('pip').applyFix(
+      directory,
+      [{ ...action, packageName: 'zope.interface' }],
+      new Map(),
+      false,
+    );
+    expect(result.success).toBe(false);
+    expect(readFileSync(file, 'utf8')).toBe(before);
+    expect(execCommand).not.toHaveBeenCalled();
+  });
+
   it('restores the original requirement when installation fails', async () => {
     const file = join(directory, 'requirements.txt');
     writeFileSync(file, 'requests==2.0.0\n');
