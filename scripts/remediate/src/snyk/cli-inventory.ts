@@ -7,6 +7,7 @@ import type {
   Severity,
   SeverityThreshold,
   SnykIssue,
+  IssueInventory,
 } from './types.js';
 
 const severityRank: Record<Severity, number> = {
@@ -92,15 +93,18 @@ export async function loadIssueInventory(
   config: RemediationConfig,
   cliFindings: CliVulnerability[],
   options: IssueInventoryOptions = {},
-): Promise<SnykIssue[]> {
+): Promise<IssueInventory> {
   if (!config.snykProjectIds?.length) {
     logger.info(
       'No SNYK_PROJECT_IDS configured; using repository-local CLI inventory to avoid organization-wide cross-repository findings',
     );
-    return buildCliInventory(cliFindings, config.snykOrgId, config.severityThreshold);
+    return {
+      issues: buildCliInventory(cliFindings, config.snykOrgId, config.severityThreshold),
+      source: 'cli',
+    };
   }
   try {
-    return await (options.restFetcher ?? fetchSnykIssues)(config);
+    return { issues: await (options.restFetcher ?? fetchSnykIssues)(config), source: 'rest' };
   } catch (error) {
     if (!(error instanceof SnykApiError) || error.status !== 403) throw error;
     logger.warn(
@@ -112,6 +116,9 @@ export async function loadIssueInventory(
         : options.cliFallbackLoader
           ? await options.cliFallbackLoader()
           : [];
-    return buildCliInventory(fallbackFindings, config.snykOrgId, config.severityThreshold);
+    return {
+      issues: buildCliInventory(fallbackFindings, config.snykOrgId, config.severityThreshold),
+      source: 'cli',
+    };
   }
 }

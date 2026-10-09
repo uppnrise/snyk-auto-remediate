@@ -24,6 +24,15 @@ const upgradable: CliVulnerability = {
 };
 
 describe('CLI-only issue inventory', () => {
+  it('retains the REST source for successful scoped inventory', async () => {
+    const config = { snykProjectIds: ['project-id'] } as RemediationConfig;
+    await expect(
+      loadIssueInventory(config, [], { restFetcher: () => Promise.resolve([]) }),
+    ).resolves.toEqual({
+      source: 'rest',
+      issues: [],
+    });
+  });
   it('skips local CLI collection when REST projects explicitly scope the inventory', () => {
     expect(shouldCollectCliFindings({ snykProjectIds: ['project-id'] })).toBe(false);
     expect(shouldCollectCliFindings({})).toBe(true);
@@ -72,9 +81,10 @@ describe('CLI-only issue inventory', () => {
     const restFetcher = (): Promise<SnykIssue[]> =>
       Promise.reject(new Error('REST must not be called without an explicit project scope'));
 
-    await expect(loadIssueInventory(config, [upgradable], { restFetcher })).resolves.toHaveLength(
-      1,
-    );
+    await expect(loadIssueInventory(config, [upgradable], { restFetcher })).resolves.toMatchObject({
+      source: 'cli',
+      issues: buildCliInventory([upgradable], 'org-id', 'high'),
+    });
   });
 
   it('falls back on REST 403 but keeps other scoped REST failures fatal', async () => {
@@ -90,7 +100,10 @@ describe('CLI-only issue inventory', () => {
 
     await expect(
       loadIssueInventory(config, [upgradable], { restFetcher: forbidden }),
-    ).resolves.toHaveLength(1);
+    ).resolves.toMatchObject({
+      source: 'cli',
+      issues: buildCliInventory([upgradable], 'org-id', 'high'),
+    });
     await expect(
       loadIssueInventory(config, [upgradable], { restFetcher: unauthorized }),
     ).rejects.toMatchObject({ status: 401 });
@@ -115,6 +128,7 @@ describe('CLI-only issue inventory', () => {
     });
 
     expect(fallbackCalls).toBe(1);
-    expect(inventory).toHaveLength(1);
+    expect(inventory.source).toBe('cli');
+    expect(inventory.issues).toHaveLength(1);
   });
 });

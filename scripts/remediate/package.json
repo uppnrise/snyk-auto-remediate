@@ -1,6 +1,6 @@
 {
   "name": "snyk-auto-remediate",
-  "version": "1.0.0",
+  "version": "1.0.0-rc.1",
   "description": "Snyk security auto-remediation engine",
   "type": "module",
   "main": "src/index.ts",

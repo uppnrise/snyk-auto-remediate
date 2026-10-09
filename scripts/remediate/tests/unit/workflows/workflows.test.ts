@@ -11,6 +11,21 @@ function workflow(name: string): string {
 }
 
 describe('GitHub Actions workflows', () => {
+  it('passes the scanned target and authorization to the SARIF uploader', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    const step = reusable.slice(
+      reusable.indexOf('- name: Upload SARIF report'),
+      reusable.indexOf('- name: Upload remediation artifacts'),
+    );
+    expect(step).toContain(
+      "GITHUB_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}",
+    );
+    expect(step).toContain('TARGET_BRANCH: ${{ matrix.branch }}');
+    expect(step).toContain('GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}');
+    expect(step).toContain("SARIF_CATEGORY: snyk-auto-remediation-${{ inputs['report-id'] }}");
+    expect(step).toContain("steps.remediate.outcome == 'success'");
+    expect(step).toContain('src/upload-sarif.ts');
+  });
   it('defaults remediation to the repository default branch', () => {
     const entry = workflow('snyk-remediate.yml');
     expect(entry).not.toContain("'main'");
@@ -34,7 +49,7 @@ describe('GitHub Actions workflows', () => {
   it('uploads reports from the configured working directory', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain(
-      'sarif_file: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif',
+      'WORKING_DIRECTORY: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}',
     );
     expect(reusable).toContain(
       '${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.json',
@@ -90,7 +105,7 @@ describe('GitHub Actions workflows', () => {
     expect(ci).toContain('rhysd/actionlint:1.7.12');
     expect(ci).toContain('npm run format:check');
     expect(ci).toContain('npm run lint');
-    expect(ci).toContain('npm test -- --run');
+    expect(ci).toContain('npm run test:coverage');
     expect(ci).toContain('npm run build');
   });
 
@@ -109,9 +124,9 @@ describe('GitHub Actions workflows', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain('alert-on-failure:');
     expect(reusable).toContain('needs: [prepare, remediate]');
-    expect(reusable).toContain('if: failure()');
+    expect(reusable).toContain("if: failure() && !inputs['dry-run']");
     expect(reusable).toContain('close-failure-alert:');
-    expect(reusable).toContain('if: success()');
+    expect(reusable).toContain("if: success() && !inputs['dry-run']");
     expect(reusable).toContain('automation-failure');
     expect(reusable).toContain('snyk-remediation-workflow-failure:');
     expect(reusable).toContain('gh issue create --repo "$ALERT_REPOSITORY"');

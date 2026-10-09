@@ -77,6 +77,36 @@ export class GitHubApiClient {
     return (await response.json()) as GitHubIssue;
   }
 
+  async uploadSarif(payload: SarifUploadPayload): Promise<string> {
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/code-scanning/sarifs`,
+      { method: 'POST', headers: this.headers, body: JSON.stringify(payload) },
+    );
+    if (!response.ok) {
+      throw new Error(`GitHub SARIF upload failed: ${response.status} ${await response.text()}`);
+    }
+    const result = (await response.json()) as { id?: unknown };
+    if (typeof result.id !== 'string' || !result.id) {
+      throw new Error('GitHub SARIF upload returned no processing ID');
+    }
+    return result.id;
+  }
+
+  async getSarifStatus(id: string): Promise<SarifProcessingStatus> {
+    const response = await githubFetchWithRetry(
+      `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/code-scanning/sarifs/${encodeURIComponent(id)}`,
+      { headers: this.headers },
+    );
+    if (!response.ok) {
+      throw new Error(`GitHub SARIF status failed: ${response.status} ${await response.text()}`);
+    }
+    const result = (await response.json()) as SarifProcessingStatus;
+    if (!['pending', 'complete', 'failed'].includes(result.processing_status)) {
+      throw new Error('GitHub returned an unknown SARIF processing status');
+    }
+    return result;
+  }
+
   async updateIssue(issueNumber: number, params: UpdateIssueParams): Promise<GitHubIssue> {
     const url = `${GITHUB_API_BASE}/repos/${this.owner}/${this.repo}/issues/${issueNumber}`;
     const response = await githubFetchWithRetry(url, {
@@ -238,6 +268,18 @@ export interface CreateIssueParams {
   body: string;
   labels?: string[];
   assignees?: string[];
+}
+
+export interface SarifUploadPayload {
+  commit_sha: string;
+  ref: string;
+  sarif: string;
+  checkout_uri: string;
+}
+
+export interface SarifProcessingStatus {
+  processing_status: 'pending' | 'complete' | 'failed';
+  errors?: string[];
 }
 
 export interface UpdateIssueParams {

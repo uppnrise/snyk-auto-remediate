@@ -91,6 +91,11 @@ export interface SnykApiResponse {
   data: SnykIssue[];
   links?: { next?: string; prev?: string; first?: string; last?: string; self?: string };
 }
+export type InventorySource = 'cli' | 'rest';
+export interface IssueInventory {
+  issues: SnykIssue[];
+  source: InventorySource;
+}
 export interface CliVulnerability {
   issueKey: string;
   title?: string;
@@ -161,6 +166,7 @@ export interface RemediationConfig {
   remediationBranchSuffix?: string;
 }
 export interface RemediationReport {
+  inventorySource?: InventorySource;
   timestamp: string;
   repository: string;
   targetBranch: string;

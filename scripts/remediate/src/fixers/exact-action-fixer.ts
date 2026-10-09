@@ -53,10 +53,19 @@ export class ExactActionFixer extends BaseFixer {
       const before = readFileSync(path, 'utf8');
       let after: string;
       if (this.packageManager === 'pip') {
-        const escaped = action.packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const packagePattern = action.packageName
+          .split(/[-_.]+/)
+          .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('[-_.]+');
+        // Actions do not identify environment markers. Count even unsupported declarations
+        // (such as direct references) so a supported line cannot hide an ambiguous package.
+        const declarations = before.matchAll(
+          new RegExp(`^[ \\t]*${packagePattern}(?=[\\s\\[<>=!~;#@]|$)`, 'gim'),
+        );
+        if ([...declarations].length !== 1) return false;
         after = before.replace(
           new RegExp(
-            `^(\\\\s*${escaped}(?:\\\\[[^\\\\]]+\\\\])?)(?:\\\\s*[<>=!~^]+\\\\s*[^;\\\\s]+)?(\\\\s*(?:;.*)?)$`,
+            `^([ \\t]*${packagePattern}(?:\\[[^\\r\\n\\]]+\\])?)(?:[ \\t]*[<>=!~]+[ \\t]*[^;#,\\s]+(?:[ \\t]*,[ \\t]*[<>=!~]+[ \\t]*[^;#,\\s]+)*)?([ \\t]*(?:;[^#\\r\\n]*)?(?:#.*)?)$`,
             'im',
           ),
           `$1==${action.targetVersion}$2`,
