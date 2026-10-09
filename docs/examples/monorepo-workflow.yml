@@ -14,9 +14,9 @@ permissions:
 
 jobs:
   api:
-    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.1
+    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.2
     with:
-      engine-ref: v1.0.0-rc.1
+      engine-ref: v1.0.0-rc.2
       target-branches: main
       working-directory: packages/api
       report-id: api
@@ -25,9 +25,9 @@ jobs:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
   web:
-    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.1
+    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.2
     with:
-      engine-ref: v1.0.0-rc.1
+      engine-ref: v1.0.0-rc.2
       target-branches: main
       working-directory: packages/web
       report-id: web

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/uppnrise/snyk-auto-remediate/actions/workflows/ci.yml/badge.svg)](https://github.com/uppnrise/snyk-auto-remediate/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Release candidate](https://img.shields.io/badge/release-1.0.0--rc.1-orange.svg)](https://github.com/uppnrise/snyk-auto-remediate/releases/tag/v1.0.0-rc.1)
+[![Release candidate](https://img.shields.io/badge/release-1.0.0--rc.2-orange.svg)](https://github.com/uppnrise/snyk-auto-remediate/releases/tag/v1.0.0-rc.2)
 
 Automated, evidence-based dependency remediation for GitHub repositories.
 
@@ -55,9 +55,9 @@ permissions:
 
 jobs:
   remediate:
-    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.1
+    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.2
     with:
-      engine-ref: v1.0.0-rc.1
+      engine-ref: v1.0.0-rc.2
       target-branches: main
       severity-threshold: high
       dry-run: true
@@ -70,7 +70,7 @@ the result matches the repository. Set `SNYK_ORG_ID` as a GitHub Actions variabl
 explicit `snyk-project-ids`.
 
 Pin the reusable workflow reference and `engine-ref` to the same reviewed tag or commit SHA.
-The example uses the first release candidate; stable promotion is tracked in the roadmap.
+The example uses the second release candidate; stable promotion is tracked in the roadmap.
 The Snyk CLI itself follows the floating `stable` channel.
 
 ## Inventory and project scoping
@@ -179,8 +179,8 @@ For SARIF upload, the token must also have code-scanning write access to the tar
 - Pushes use `--force-with-lease`.
 - Older remediation branches and PRs are retained when moving to hashed branch names. Review and
   close them manually after the replacement PR is ready. Scope version 2 similarly leaves older
-  fallback issues untouched. These changes are listed under Unreleased in the changelog; the
-  `v1.0.0-rc.1` tag retains its original behavior.
+  fallback issues untouched. These changes shipped in
+  `v1.0.0-rc.2`; the earlier `v1.0.0-rc.1` tag retains its original behavior.
 - Custom labels are created when missing.
 - If the configured Copilot assignee is unavailable, the fallback issue is created unassigned
   instead of failing the entire run. Assigning issues to Copilot requires the relevant GitHub
