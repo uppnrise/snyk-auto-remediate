@@ -109,6 +109,25 @@ describe('fallback issue lifecycle', () => {
     ).toBe(buildIssueScope({ ...config, snykProjectIds: ['a', 'b'] }));
   });
 
+  it('does not reconcile REST or old version scopes during a complete CLI fallback', async () => {
+    const scoped = { ...config, dryRun: false, githubToken: 'test', snykProjectIds: ['project'] };
+    expect(buildIssueScope(scoped, 'cli')).not.toBe(buildIssueScope(scoped, 'rest'));
+    vi.spyOn(GitHubApiClient.prototype, 'ensureLabel').mockResolvedValue();
+    vi.spyOn(GitHubApiClient.prototype, 'listIssues').mockResolvedValue([
+      { number: 42, body: buildIssueBody(issue, scoped, 'rest'), state: 'open' },
+      {
+        number: 43,
+        body: '<!-- snyk-finding-id: old -->\n<!-- snyk-remediation-scope: v1-old -->',
+        state: 'open',
+      },
+    ] as Awaited<ReturnType<GitHubApiClient['listIssues']>>);
+    const update = vi.spyOn(GitHubApiClient.prototype, 'updateIssue');
+    await expect(
+      createOrUpdateIssues([], scoped, { inventoryComplete: true, inventorySource: 'cli' }),
+    ).resolves.toMatchObject({ closed: 0 });
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('does not contact GitHub with incomplete inventory', async () => {
     const ensureLabel = vi.spyOn(GitHubApiClient.prototype, 'ensureLabel');
     const listIssues = vi.spyOn(GitHubApiClient.prototype, 'listIssues');

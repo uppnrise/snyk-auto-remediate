@@ -4,7 +4,7 @@ This example is documentation, not a real scan or a vulnerability claim about th
 
 **Title:** `fix(security): Snyk auto-remediation for main`
 
-**Head branch:** `chore/security/snyk-remediation-main-api`
+**Head branch:** `chore/security/snyk-remediation-main-api-eccc055b8b4420b8`
 
 **Base branch:** `main`
 

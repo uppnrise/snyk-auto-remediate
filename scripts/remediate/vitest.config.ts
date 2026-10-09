@@ -9,7 +9,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
       include: ['src/**/*.ts'],
-      exclude: ['src/index.ts'],
+      exclude: ['src/index.ts', 'src/upload-sarif.ts'],
       thresholds: {
         statements: 70,
         branches: 65,

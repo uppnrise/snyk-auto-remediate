@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Preserve actionable CLI findings and SARIF results after scoped REST access returns 403.
+  Record the actual inventory source and isolate CLI/REST issue reconciliation with version 2 scopes.
+- Add a deterministic hash to remediation branches so distinct branch/report IDs cannot collide
+  after punctuation replacement or truncation. Retain older branches, PRs, and issue scopes for review.
+- Upload SARIF to the scanned repository/ref/commit, including published remediation branches,
+  and wait for GitHub processing before reporting success.
+- Correct pip requirement matching for exact pins, ranges, bare packages, extras, markers, and
+  comments; retain unsupported direct references for manual work and roll back failed installs.
+
 ## 1.0.0-rc.1
 
 First tagged release candidate. Validate against disposable repositories before production use.
