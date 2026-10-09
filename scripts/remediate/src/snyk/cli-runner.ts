@@ -34,6 +34,8 @@ export async function scanWithSnykCli(
   } catch (error) {
     if (
       !(error instanceof Error) ||
+      !('exitCode' in error) ||
+      error.exitCode !== 1 ||
       !('stdout' in error) ||
       typeof (error as { stdout?: unknown }).stdout !== 'string'
     ) {
@@ -42,7 +44,39 @@ export async function scanWithSnykCli(
     stdout = (error as Error & { stdout: string }).stdout;
   }
   try {
-    return normalizeCliOutput(JSON.parse(stdout) as unknown, ecosystem);
+    const raw: unknown = JSON.parse(stdout);
+    const results: unknown[] = Array.isArray(raw) ? raw : [raw];
+    if (results.length === 0) throw new Error('Snyk returned no project results');
+    for (const result of results) {
+      if (
+        typeof result !== 'object' ||
+        result === null ||
+        !('vulnerabilities' in result) ||
+        !Array.isArray(result.vulnerabilities) ||
+        ('error' in result && result.error) ||
+        ('ok' in result && result.ok === false && result.vulnerabilities.length === 0)
+      ) {
+        throw new Error('Snyk returned an incomplete project result');
+      }
+      for (const vulnerability of result.vulnerabilities as unknown[]) {
+        if (
+          typeof vulnerability !== 'object' ||
+          vulnerability === null ||
+          !('id' in vulnerability) ||
+          typeof vulnerability.id !== 'string' ||
+          !('packageName' in vulnerability) ||
+          typeof vulnerability.packageName !== 'string' ||
+          !('version' in vulnerability) ||
+          typeof vulnerability.version !== 'string' ||
+          !('severity' in vulnerability) ||
+          typeof vulnerability.severity !== 'string' ||
+          !['info', 'low', 'medium', 'high', 'critical'].includes(vulnerability.severity)
+        ) {
+          throw new Error('Snyk returned a malformed vulnerability');
+        }
+      }
+    }
+    return normalizeCliOutput(raw, ecosystem);
   } catch (error) {
     const message = `Could not parse Snyk CLI output for ${ecosystem.packageManager}: ${String(error)}`;
     logger.error(message);

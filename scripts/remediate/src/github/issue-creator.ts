@@ -1,9 +1,26 @@
 import { GitHubApiClient } from './api-client.js';
 import { logger } from '../utils/logger.js';
+import { createHash } from 'crypto';
+import { posix } from 'path';
 import type { RemediationConfig, SnykIssue, Severity } from '../snyk/types.js';
 
 const FINDING_MARKER_PREFIX = '<!-- snyk-finding-id:';
 const FINDING_MARKER_SUFFIX = '-->';
+
+export function buildIssueScope(config: RemediationConfig): string {
+  const identity = [
+    'v1',
+    config.githubRepository.toLowerCase(),
+    config.targetBranch,
+    posix.normalize(config.workingDirectory).replace(/\/$/, '') || '.',
+    config.remediationBranchSuffix || 'scan',
+    config.snykOrgId,
+    [...(config.snykProjectIds ?? [])].sort(),
+    config.severityThreshold,
+    [...(config.packageManagers ?? [])].sort(),
+  ];
+  return `v1-${createHash('sha256').update(JSON.stringify(identity)).digest('hex')}`;
+}
 
 export function buildManagedIssueLabels(issueLabels: string[], managementLabel: string): string[] {
   return [...new Set([...issueLabels, managementLabel])];
@@ -28,12 +45,14 @@ interface ExistingManagedIssue {
 export function buildIssueReconciliation(
   currentIssues: SnykIssue[],
   existingIssues: ExistingManagedIssue[],
+  scope: string,
 ): { existingByFindingId: Map<string, number>; toClose: number[] } {
   const activeIds = new Set(currentIssues.map((issue) => issue.id));
   const existingByFindingId = new Map<string, number>();
   const toClose: number[] = [];
   for (const existing of existingIssues) {
     if (!existing.body) continue;
+    if (!existing.body.includes(`<!-- snyk-remediation-scope: ${scope} -->`)) continue;
     const findingId = extractFindingId(existing.body);
     if (!findingId) continue;
     existingByFindingId.set(findingId, existing.number);
@@ -89,6 +108,7 @@ export function buildIssueBody(issue: SnykIssue, config: RemediationConfig): str
       : rawFinding;
 
   return `${marker}
+<!-- snyk-remediation-scope: ${buildIssueScope(config)} -->
 
 ## Snyk Security Finding: ${attrs.title}
 
@@ -102,6 +122,9 @@ export function buildIssueBody(issue: SnykIssue, config: RemediationConfig): str
 |-------|-------|
 | **Snyk ID** | [\`${attrs.key}\`](${snykUrl}) |
 | **Snyk Project** | [\`${projectId}\`](${projectUrl}) |
+| **Target branch** | \`${config.targetBranch}\` |
+| **Project directory** | \`${config.workingDirectory}\` |
+| **Report ID** | \`${config.remediationBranchSuffix || 'scan'}\` |
 | **Severity** | ${severityColor(severity)} ${severity.toUpperCase()} |
 | **CVSS Score** | ${cvssScore != null ? cvssScore.toFixed(1) : 'N/A'} |
 | **CVE(s)** | ${cves.length > 0 ? cves.join(', ') : 'N/A'} |
@@ -161,8 +184,13 @@ ${boundedRawFinding}
 export async function createOrUpdateIssues(
   unfixableIssues: SnykIssue[],
   config: RemediationConfig,
+  options: { inventoryComplete: boolean },
 ): Promise<{ created: number; updated: number; closed: number; planned: number }> {
   const summary = { created: 0, updated: 0, closed: 0, planned: 0 };
+  if (!options.inventoryComplete) {
+    logger.warn('Inventory or run is incomplete — preserving all fallback issues');
+    return summary;
+  }
   if (!config.enableCopilotAgentFallback) {
     logger.info('Copilot agent fallback disabled — skipping issue creation');
     return summary;
@@ -194,7 +222,11 @@ export async function createOrUpdateIssues(
   );
   const existingIssues = await client.listIssues('open', [config.issueManagementLabel]);
 
-  const reconciliation = buildIssueReconciliation(unfixableIssues, existingIssues);
+  const reconciliation = buildIssueReconciliation(
+    unfixableIssues,
+    existingIssues,
+    buildIssueScope(config),
+  );
   for (const issueNumber of reconciliation.toClose) {
     await client.updateIssue(issueNumber, { state: 'closed' });
     logger.info(`Closed resolved fallback issue #${issueNumber}`);

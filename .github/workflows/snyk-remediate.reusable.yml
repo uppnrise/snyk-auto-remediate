@@ -321,7 +321,7 @@ jobs:
 
       # ── Upload SARIF to GitHub Security ────────────────────────────────────
       - name: Upload SARIF report
-        if: always() && hashFiles(format('{0}/snyk-remediation-report.sarif', needs.prepare.outputs.target-path)) != ''
+        if: always() && steps.remediate.outcome == 'success' && hashFiles(format('{0}/snyk-remediation-report.sarif', needs.prepare.outputs.target-path)) != ''
         uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif
@@ -346,7 +346,7 @@ jobs:
   alert-on-failure:
     name: Alert on remediation failure
     needs: [prepare, remediate]
-    if: failure()
+    if: failure() && !inputs['dry-run']
     runs-on: ubuntu-latest
     steps:
       - name: Open or update failure alert issue
@@ -380,7 +380,7 @@ jobs:
   close-failure-alert:
     name: Close failure alert on success
     needs: [prepare, remediate]
-    if: success()
+    if: success() && !inputs['dry-run']
     runs-on: ubuntu-latest
     steps:
       - name: Close failure alert issue if present

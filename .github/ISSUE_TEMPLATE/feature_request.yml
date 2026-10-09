@@ -1,0 +1,22 @@
+name: Feature request
+description: Propose a concrete improvement
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Use case and current limitation
+      description: Describe the repository/project layout and why the current workflow cannot handle it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: For remediation changes, explain the evidence, verification, and rollback requirements.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and acceptance criteria

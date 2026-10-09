@@ -1,0 +1,36 @@
+# Save as .github/workflows/snyk-remediation.yml in a repository with these directories.
+name: Monorepo Snyk remediation
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1'
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  security-events: write
+
+jobs:
+  api:
+    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.1
+    with:
+      engine-ref: v1.0.0-rc.1
+      target-branches: main
+      working-directory: packages/api
+      report-id: api
+      dry-run: true
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+
+  web:
+    uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.1
+    with:
+      engine-ref: v1.0.0-rc.1
+      target-branches: main
+      working-directory: packages/web
+      report-id: web
+      dry-run: true
+    secrets:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}

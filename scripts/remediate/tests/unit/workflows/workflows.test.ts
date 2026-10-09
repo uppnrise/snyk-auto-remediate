@@ -90,7 +90,7 @@ describe('GitHub Actions workflows', () => {
     expect(ci).toContain('rhysd/actionlint:1.7.12');
     expect(ci).toContain('npm run format:check');
     expect(ci).toContain('npm run lint');
-    expect(ci).toContain('npm test -- --run');
+    expect(ci).toContain('npm run test:coverage');
     expect(ci).toContain('npm run build');
   });
 
@@ -109,9 +109,9 @@ describe('GitHub Actions workflows', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain('alert-on-failure:');
     expect(reusable).toContain('needs: [prepare, remediate]');
-    expect(reusable).toContain('if: failure()');
+    expect(reusable).toContain("if: failure() && !inputs['dry-run']");
     expect(reusable).toContain('close-failure-alert:');
-    expect(reusable).toContain('if: success()');
+    expect(reusable).toContain("if: success() && !inputs['dry-run']");
     expect(reusable).toContain('automation-failure');
     expect(reusable).toContain('snyk-remediation-workflow-failure:');
     expect(reusable).toContain('gh issue create --repo "$ALERT_REPOSITORY"');
