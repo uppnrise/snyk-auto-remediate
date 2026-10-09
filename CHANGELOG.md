@@ -12,6 +12,9 @@
   and wait for GitHub processing before reporting success.
 - Correct pip requirement matching for exact pins, ranges, bare packages, extras, markers, and
   comments; retain unsupported direct references for manual work and roll back failed installs.
+- Reject repeated pip declarations, including conditional requirements and unsupported direct
+  references, when the action cannot identify a unique declaration. Preserve the manifest for
+  manual remediation instead of changing the first matching line.
 
 ## 1.0.0-rc.1
 
