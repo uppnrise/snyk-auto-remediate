@@ -90,6 +90,9 @@ Safety is repository-first:
 
 If scoped REST access returns `403`, the engine safely falls back to repository-local CLI
 inventory.
+The report records the actual inventory source. A CLI fallback keeps local findings actionable
+and reportable without filtering them against REST project UUIDs. CLI and REST issue scopes are
+separate, so a fallback run cannot close issues created from REST inventory.
 
 ## Remediation flow
 
@@ -150,16 +153,22 @@ Yarn and pnpm take precedence over the generic `package.json` npm signature. A s
 
 For a different private target repository, provide `GH_PAT`. The caller's `github.token` normally
 suffices when the caller and target are the same repository.
+For SARIF upload, the token must also have code-scanning write access to the target repository
+([GitHub SARIF API permissions](https://docs.github.com/en/rest/code-scanning/code-scanning#upload-an-analysis-as-sarif-data)).
 
 ## Operational behavior
 
 - Remediation branches are stable:
-  `chore/security/snyk-remediation-{target-branch}-{report-id}`.
+  `chore/security/snyk-remediation-{target-branch}-{report-id}-{hash}`. The hash uses the original
+  branch and report ID, preventing punctuation or truncated names from sharing a branch.
 - Repeated runs reset that automation-owned branch from the requested target branch and update the
   existing PR.
 - Workflow concurrency serializes runs for the same repository, branch, and report ID.
 - Fallback issue scope includes the repository-relative directory, target branch, report ID,
-  organization/project selection, severity threshold, and package-manager selection.
+  actual inventory source, organization/project selection, severity threshold, and package-manager selection.
+- SARIF is uploaded to the scanned repository, branch, and commit. After a published fix, results
+  belong to the remediation branch; target-branch alerts remain until that branch is scanned again.
+  Uploads wait for GitHub processing and fail if validation fails or processing times out.
 - Failed or partial scans, unsupported project directories, failed tests, and push/PR errors
   preserve existing fallback issues. A failed engine step does not replace code-scanning results
   with partial SARIF; JSON/SARIF artifacts remain available for diagnosis.
@@ -168,6 +177,10 @@ suffices when the caller and target are the same repository.
 - Changing scope inputs creates a new issue-management scope. Review issues in the old scope
   manually. Keep report IDs stable and unique per project invocation.
 - Pushes use `--force-with-lease`.
+- Older remediation branches and PRs are retained when moving to hashed branch names. Review and
+  close them manually after the replacement PR is ready. Scope version 2 similarly leaves older
+  fallback issues untouched. These changes are listed under Unreleased in the changelog; the
+  `v1.0.0-rc.1` tag retains its original behavior.
 - Custom labels are created when missing.
 - If the configured Copilot assignee is unavailable, the fallback issue is created unassigned
   instead of failing the entire run. Assigning issues to Copilot requires the relevant GitHub

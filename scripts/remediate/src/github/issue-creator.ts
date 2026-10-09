@@ -2,14 +2,18 @@ import { GitHubApiClient } from './api-client.js';
 import { logger } from '../utils/logger.js';
 import { createHash } from 'crypto';
 import { posix } from 'path';
-import type { RemediationConfig, SnykIssue, Severity } from '../snyk/types.js';
+import type { RemediationConfig, SnykIssue, Severity, InventorySource } from '../snyk/types.js';
 
 const FINDING_MARKER_PREFIX = '<!-- snyk-finding-id:';
 const FINDING_MARKER_SUFFIX = '-->';
 
-export function buildIssueScope(config: RemediationConfig): string {
+export function buildIssueScope(
+  config: RemediationConfig,
+  source: InventorySource = config.snykProjectIds?.length ? 'rest' : 'cli',
+): string {
   const identity = [
-    'v1',
+    'v2',
+    source,
     config.githubRepository.toLowerCase(),
     config.targetBranch,
     posix.normalize(config.workingDirectory).replace(/\/$/, '') || '.',
@@ -19,7 +23,7 @@ export function buildIssueScope(config: RemediationConfig): string {
     config.severityThreshold,
     [...(config.packageManagers ?? [])].sort(),
   ];
-  return `v1-${createHash('sha256').update(JSON.stringify(identity)).digest('hex')}`;
+  return `v2-${createHash('sha256').update(JSON.stringify(identity)).digest('hex')}`;
 }
 
 export function buildManagedIssueLabels(issueLabels: string[], managementLabel: string): string[] {
@@ -72,7 +76,11 @@ function severityColor(severity: Severity): string {
   return colors[severity];
 }
 
-export function buildIssueBody(issue: SnykIssue, config: RemediationConfig): string {
+export function buildIssueBody(
+  issue: SnykIssue,
+  config: RemediationConfig,
+  source?: InventorySource,
+): string {
   const attrs = issue.attributes;
   const severity = attrs.effective_severity_level;
   const marker = buildFindingMarker(issue.id);
@@ -108,7 +116,7 @@ export function buildIssueBody(issue: SnykIssue, config: RemediationConfig): str
       : rawFinding;
 
   return `${marker}
-<!-- snyk-remediation-scope: ${buildIssueScope(config)} -->
+<!-- snyk-remediation-scope: ${buildIssueScope(config, source)} -->
 
 ## Snyk Security Finding: ${attrs.title}
 
@@ -184,7 +192,7 @@ ${boundedRawFinding}
 export async function createOrUpdateIssues(
   unfixableIssues: SnykIssue[],
   config: RemediationConfig,
-  options: { inventoryComplete: boolean },
+  options: { inventoryComplete: boolean; inventorySource?: InventorySource },
 ): Promise<{ created: number; updated: number; closed: number; planned: number }> {
   const summary = { created: 0, updated: 0, closed: 0, planned: 0 };
   if (!options.inventoryComplete) {
@@ -225,7 +233,7 @@ export async function createOrUpdateIssues(
   const reconciliation = buildIssueReconciliation(
     unfixableIssues,
     existingIssues,
-    buildIssueScope(config),
+    buildIssueScope(config, options.inventorySource),
   );
   for (const issueNumber of reconciliation.toClose) {
     await client.updateIssue(issueNumber, { state: 'closed' });
@@ -240,7 +248,7 @@ export async function createOrUpdateIssues(
     const labels = [...managedIssueLabels, `severity/${severity}`];
 
     const title = `[Snyk] ${issue.attributes.title}`;
-    const body = buildIssueBody(issue, config);
+    const body = buildIssueBody(issue, config, options.inventorySource);
 
     const existingIssueNumber = reconciliation.existingByFindingId.get(issue.id);
 

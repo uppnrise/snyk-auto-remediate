@@ -11,6 +11,21 @@ function workflow(name: string): string {
 }
 
 describe('GitHub Actions workflows', () => {
+  it('passes the scanned target and authorization to the SARIF uploader', () => {
+    const reusable = workflow('snyk-remediate.reusable.yml');
+    const step = reusable.slice(
+      reusable.indexOf('- name: Upload SARIF report'),
+      reusable.indexOf('- name: Upload remediation artifacts'),
+    );
+    expect(step).toContain(
+      "GITHUB_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}",
+    );
+    expect(step).toContain('TARGET_BRANCH: ${{ matrix.branch }}');
+    expect(step).toContain('GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}');
+    expect(step).toContain("SARIF_CATEGORY: snyk-auto-remediation-${{ inputs['report-id'] }}");
+    expect(step).toContain("steps.remediate.outcome == 'success'");
+    expect(step).toContain('src/upload-sarif.ts');
+  });
   it('defaults remediation to the repository default branch', () => {
     const entry = workflow('snyk-remediate.yml');
     expect(entry).not.toContain("'main'");
@@ -34,7 +49,7 @@ describe('GitHub Actions workflows', () => {
   it('uploads reports from the configured working directory', () => {
     const reusable = workflow('snyk-remediate.reusable.yml');
     expect(reusable).toContain(
-      'sarif_file: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif',
+      'WORKING_DIRECTORY: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}',
     );
     expect(reusable).toContain(
       '${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.json',

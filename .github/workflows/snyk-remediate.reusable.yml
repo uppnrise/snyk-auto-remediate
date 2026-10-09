@@ -322,10 +322,13 @@ jobs:
       # ── Upload SARIF to GitHub Security ────────────────────────────────────
       - name: Upload SARIF report
         if: always() && steps.remediate.outcome == 'success' && hashFiles(format('{0}/snyk-remediation-report.sarif', needs.prepare.outputs.target-path)) != ''
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.sarif
-          category: snyk-auto-remediation-${{ inputs['report-id'] }}
+        env:
+          WORKING_DIRECTORY: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}
+          GITHUB_REPOSITORY: ${{ inputs['target-repository'] || github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          TARGET_BRANCH: ${{ matrix.branch }}
+          SARIF_CATEGORY: snyk-auto-remediation-${{ inputs['report-id'] }}
+        run: ${{ github.workspace }}/.snyk-auto-remediate/scripts/remediate/node_modules/.bin/tsx ${{ github.workspace }}/.snyk-auto-remediate/scripts/remediate/src/upload-sarif.ts
 
       # ── Upload JSON + SARIF artifacts ──────────────────────────────────────
       - name: Upload remediation artifacts

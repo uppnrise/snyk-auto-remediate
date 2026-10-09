@@ -1,5 +1,6 @@
 import { execCommand } from './exec.js';
 import { logger } from './logger.js';
+import { createHash } from 'crypto';
 
 export async function gitProjectDirectory(workingDirectory: string): Promise<string> {
   const result = await execCommand('git', ['rev-parse', '--show-prefix'], {
@@ -46,10 +47,14 @@ export async function gitConfigureUser(
 }
 
 export function buildRemediationBranchName(targetBranch: string, suffix?: string): string {
-  const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '-');
-  const safeSuffix = suffix?.replace(/[^a-zA-Z0-9_-]/g, '-');
+  const safeBranch = targetBranch.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  const safeSuffix = suffix?.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 48);
   const suffixSegment = safeSuffix ? `-${safeSuffix}` : '';
-  return `chore/security/snyk-remediation-${safeBranch}${suffixSegment}`;
+  const hash = createHash('sha256')
+    .update(JSON.stringify([targetBranch, suffix ?? null]))
+    .digest('hex')
+    .slice(0, 16);
+  return `chore/security/snyk-remediation-${safeBranch}${suffixSegment}-${hash}`;
 }
 
 export async function gitPush(workingDirectory: string, branchName: string): Promise<void> {

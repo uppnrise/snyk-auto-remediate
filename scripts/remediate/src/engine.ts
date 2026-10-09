@@ -86,18 +86,22 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
   // 2. Prefer organization REST inventory, but retain a local CLI-only mode for plans without
   // API entitlement. Authentication and all other REST failures remain fatal.
   logger.info('Fetching Snyk issues...');
-  let allIssues = await loadIssueInventory(config, cliFindings, {
+  const inventory = await loadIssueInventory(config, cliFindings, {
     cliFallbackLoader: async () => {
       cliFindings = await collectCliFindings();
       return cliFindings;
     },
   });
-  allIssues = deduplicateIssues(allIssues);
+  const allIssues = deduplicateIssues(inventory.issues);
   logger.info(`Total unique issues: ${allIssues.length}`);
 
   const plan = buildRemediationPlan(allIssues, cliFindings, {
-    ...(config.snykProjectIds ? { scopedProjectIds: config.snykProjectIds } : {}),
-    ...(ecosystems.length === 1 ? { restPackageManager: ecosystems[0]!.packageManager } : {}),
+    ...(inventory.source === 'rest' && config.snykProjectIds
+      ? { scopedProjectIds: config.snykProjectIds }
+      : {}),
+    ...(inventory.source === 'rest' && ecosystems.length === 1
+      ? { restPackageManager: ecosystems[0]!.packageManager }
+      : {}),
   });
   const runtimeNonActionable = [...plan.nonActionable];
   const findingsById = new Map(allIssues.map((issue) => [issue.id, issue]));
@@ -258,7 +262,7 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
     const issueSummary = await createOrUpdateIssues(
       fallbackIssues,
       { ...config, workingDirectory: projectDirectory },
-      { inventoryComplete: errors.length === 0 },
+      { inventoryComplete: errors.length === 0, inventorySource: inventory.source },
     );
     issuesCreated = issueSummary.created;
     issuesUpdated = issueSummary.updated;
@@ -275,6 +279,7 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
     ? 0
     : fixResults.reduce((sum, r) => sum + (r.verifiedFindingIds?.length ?? 0), 0);
   const report: RemediationReport = {
+    inventorySource: inventory.source,
     timestamp: new Date().toISOString(),
     repository: config.githubRepository,
     targetBranch: config.targetBranch,
@@ -315,7 +320,11 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
   // 7. Write reports
   writeJsonReport(report, workingDir);
   const verifiedIds = fixResults.flatMap((result) => result.verifiedFindingIds ?? []);
-  const reportableIssues = selectReportableIssues(allIssues, verifiedIds, config.snykProjectIds);
+  const reportableIssues = selectReportableIssues(
+    allIssues,
+    verifiedIds,
+    inventory.source === 'rest' ? config.snykProjectIds : undefined,
+  );
   writeSarifReport(reportableIssues, config.githubRepository, workingDir);
   writeStepSummary(report);
 

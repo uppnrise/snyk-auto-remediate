@@ -56,7 +56,7 @@ export class ExactActionFixer extends BaseFixer {
         const escaped = action.packageName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         after = before.replace(
           new RegExp(
-            `^(\\\\s*${escaped}(?:\\\\[[^\\\\]]+\\\\])?)(?:\\\\s*[<>=!~^]+\\\\s*[^;\\\\s]+)?(\\\\s*(?:;.*)?)$`,
+            `^([ \\t]*${escaped}(?:\\[[^\\r\\n\\]]+\\])?)(?:[ \\t]*[<>=!~]+[ \\t]*[^;#,\\s]+(?:[ \\t]*,[ \\t]*[<>=!~]+[ \\t]*[^;#,\\s]+)*)?([ \\t]*(?:;[^#\\r\\n]*)?(?:#.*)?)$`,
             'im',
           ),
           `$1==${action.targetVersion}$2`,

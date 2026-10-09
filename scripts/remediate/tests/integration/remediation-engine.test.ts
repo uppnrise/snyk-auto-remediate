@@ -251,4 +251,31 @@ describe('remediation orchestration with external services mocked', () => {
     expect(GitHubApiClient.prototype.listIssues).not.toHaveBeenCalled();
     expect(report().errors.join(' ')).toContain('local scan failed');
   });
+
+  it('retains CLI fallback findings in SARIF after a scoped REST 403', async () => {
+    config.snykOrgId = 'org';
+    config.snykProjectIds = ['rest-project-uuid'];
+    vi.spyOn(snykApi, 'fetchSnykIssues').mockRejectedValue(
+      new snykApi.SnykApiError(403, 'forbidden'),
+    );
+    vi.mocked(scanWithSnykCli).mockResolvedValue([finding]);
+    expect(await runRemediation(config)).toBe(0);
+    const sarif = JSON.parse(
+      readFileSync(join(directory, 'snyk-remediation-report.sarif'), 'utf8'),
+    ) as { runs: { results: unknown[] }[] };
+    expect(sarif.runs[0]!.results).toHaveLength(1);
+    expect(report().totalFindings).toBe(1);
+  });
+
+  it('retains exact CLI remediation evidence after a scoped REST 403', async () => {
+    config.snykOrgId = 'org';
+    config.snykProjectIds = ['rest-project-uuid'];
+    vi.spyOn(snykApi, 'fetchSnykIssues').mockRejectedValue(
+      new snykApi.SnykApiError(403, 'forbidden'),
+    );
+    mockFix();
+    expect(await runRemediation(config)).toBe(0);
+    expect(report().verifiedFixedFindings).toBe(1);
+    expect(GitHubApiClient.prototype.createPull).toHaveBeenCalled();
+  });
 });

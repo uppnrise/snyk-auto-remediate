@@ -15,6 +15,9 @@ This roadmap describes current priorities, not delivery dates. Changes are track
 - [x] Document CLI versus REST evidence and verification limits.
 - [x] Add contribution, security, issue, PR, and release guidance.
 - [x] Add example workflow, summary, JSON report, and remediation PR.
+- [x] Preserve actionable findings and SARIF during REST-to-CLI fallback, with separate issue scopes.
+- [x] Prevent remediation branch collisions and bind SARIF uploads to the scanned repo/ref/commit.
+- [x] Cover pip manifest updates and failed-install rollback with file-based regression tests.
 
 ## Before the first stable release
 
