@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.0-rc.2
+
+Second release candidate, including the follow-up remediation review fixes.
 
 ### Fixed
 

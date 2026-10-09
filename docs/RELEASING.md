@@ -5,7 +5,7 @@ Git tag, and release heading must agree. This repository is consumed through Git
 there is no npm publishing step.
 
 1. Update `scripts/remediate/package.json`, its lockfile, and `CHANGELOG.md`. Use a prerelease
-   version for candidates (for example `1.0.0-rc.1`).
+   version for candidates (for example `1.0.0-rc.2`).
 2. Run coverage, type, lint, format, and actionlint checks. Inspect the GitHub CI run for the
    exact commit, including the Snyk installation smoke test.
 3. Complete the live validation items in the [roadmap](../ROADMAP.md) before a stable release.
@@ -19,9 +19,9 @@ there is no npm publishing step.
 Consumers should reference the same tag or commit twice:
 
 ```yaml
-uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.1
+uses: uppnrise/snyk-auto-remediate/.github/workflows/snyk-remediate.reusable.yml@v1.0.0-rc.2
 with:
-  engine-ref: v1.0.0-rc.1
+  engine-ref: v1.0.0-rc.2
   target-branches: main
   dry-run: true
 ```
