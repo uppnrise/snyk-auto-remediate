@@ -6,6 +6,8 @@ import { runRemediation } from '../../src/engine.js';
 import { GitHubApiClient } from '../../src/github/api-client.js';
 import { buildIssueBody } from '../../src/github/issue-creator.js';
 import { buildCliInventory } from '../../src/snyk/cli-inventory.js';
+import { normalizeCliOutput } from '../../src/snyk/correlation.js';
+import type { SarifLog } from '../../src/reporting/sarif-writer.js';
 import { scanWithSnykCli } from '../../src/snyk/cli-runner.js';
 import * as git from '../../src/utils/git.js';
 import { ExactActionFixer } from '../../src/fixers/exact-action-fixer.js';
@@ -107,6 +109,46 @@ describe('remediation orchestration with external services mocked', () => {
       readFileSync(join(directory, 'snyk-remediation-report.json'), 'utf8'),
     ) as RemediationReport;
   }
+
+  it('writes nested CLI manifest locations and remediation reasons into the SARIF artifact', async () => {
+    config.dryRun = true;
+    vi.mocked(scanWithSnykCli).mockImplementation((ecosystem, _token, _org, repositoryDirectory) =>
+      Promise.resolve(
+        normalizeCliOutput(
+          {
+            projectName: 'api',
+            targetFile: 'package.json',
+            vulnerabilities: [
+              {
+                id: finding.issueKey,
+                title: finding.title,
+                packageName: finding.packageName,
+                version: finding.version,
+                severity: 'high',
+                description: 'Original advisory details',
+                cvssScore: 8.2,
+                upgradePath: [],
+              },
+            ],
+          },
+          ecosystem,
+          repositoryDirectory,
+        ),
+      ),
+    );
+    expect(await runRemediation(config)).toBe(0);
+    const sarif = JSON.parse(
+      readFileSync(join(directory, 'snyk-remediation-report.sarif'), 'utf8'),
+    ) as SarifLog;
+    const result = sarif.runs[0]!.results[0]!;
+    expect(result.locations?.[0]?.physicalLocation).toEqual({
+      artifactLocation: { uri: 'packages/api/package.json' },
+    });
+    expect(result.message.text).toContain('example@1.0.0');
+    expect(result.message.text).toContain('missing_exact_target');
+    expect(sarif.runs[0]!.tool.driver.rules[0]!.properties?.['security-severity']).toBe('8.2');
+    expect(sarif.runs[0]!.tool.driver.rules[0]!.help?.text).toContain('Original advisory details');
+  });
 
   it('preserves open issues when the initial scan fails and reports failure', async () => {
     existingIssue();

@@ -109,6 +109,22 @@ describe('buildSarifOutput', () => {
     expect(results[2]!.level).toBe('note'); // low
   });
 
+  it('labels severity fallback explicitly when upstream CVSS is unavailable', () => {
+    const issue = structuredClone(sampleIssue);
+    issue.attributes.problems = [];
+    const rule = buildSarifOutput([issue], 'owner/repo').runs[0]!.tool.driver.rules[0]!;
+    expect(rule.properties?.['security-severity']).toBe('7.5');
+    expect(rule.help?.text).toContain('estimated from severity');
+  });
+
+  it.each(['.', '', './'])('does not fabricate a location for %s', (resourcePath) => {
+    const issue = structuredClone(sampleIssue);
+    issue.attributes.coordinates![0]!.representations![0]!.resourcePath = resourcePath;
+    expect(buildSarifOutput([issue], 'owner/repo').runs[0]!.results[0]).not.toHaveProperty(
+      'locations',
+    );
+  });
+
   it('excludes findings verified as fixed from the uploaded report', () => {
     expect(selectReportableIssues([sampleIssue], [sampleIssue.id])).toEqual([]);
   });

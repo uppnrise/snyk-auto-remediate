@@ -99,6 +99,9 @@ export interface IssueInventory {
 export interface CliVulnerability {
   issueKey: string;
   title?: string;
+  description?: string;
+  cvssScore?: number;
+  resourcePath?: string;
   severity?: Severity;
   packageName: string;
   version: string;
