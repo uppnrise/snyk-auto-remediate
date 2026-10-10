@@ -1,6 +1,6 @@
 import { writeFileSync } from 'fs';
-import { join } from 'path';
-import type { SnykIssue } from '../snyk/types.js';
+import { isAbsolute, join, posix } from 'path';
+import type { NonActionableFinding, SnykIssue } from '../snyk/types.js';
 import { logger } from '../utils/logger.js';
 
 interface SarifResult {
@@ -39,7 +39,8 @@ interface SarifRule {
   shortDescription: { text: string };
   fullDescription?: { text: string };
   helpUri?: string;
-  properties?: { tags: string[]; security_severity: string };
+  help?: { text: string; markdown: string };
+  properties?: { tags: string[]; 'security-severity': string };
 }
 
 function severityToLevel(severity: string): 'error' | 'warning' | 'note' {
@@ -81,50 +82,117 @@ export function selectReportableIssues(
   );
 }
 
-export function buildSarifOutput(issues: SnykIssue[], repository: string): SarifLog {
+export function buildSarifOutput(
+  issues: SnykIssue[],
+  repository: string,
+  nonActionable: NonActionableFinding[] = [],
+): SarifLog {
   const rules: SarifRule[] = [];
   const results: SarifResult[] = [];
   const ruleIds = new Set<string>();
+  const reasons = new Map(nonActionable.map((finding) => [finding.issue.id, finding]));
 
   for (const issue of issues) {
     const attrs = issue.attributes;
     const ruleId = attrs.key;
 
+    const advisory =
+      attrs.problems?.find((problem) => problem.url)?.url ??
+      `https://security.snyk.io/vuln/${ruleId}`;
+    const cvss = attrs.problems
+      ?.map((problem) => problem.cvss_score)
+      .find(
+        (score): score is number =>
+          typeof score === 'number' && Number.isFinite(score) && score >= 0 && score <= 10,
+      );
+    const score =
+      cvss !== undefined ? String(cvss) : severityToCvss(attrs.effective_severity_level);
+    const scoreContext =
+      cvss !== undefined ? `CVSS: ${score} (upstream)` : `CVSS: ${score} (estimated from severity)`;
+    const coordinates = attrs.coordinates ?? [];
+    const representations = coordinates.flatMap((coordinate) => coordinate.representations ?? []);
+    const dependencies = [
+      ...new Set(
+        representations.flatMap((representation) =>
+          representation.dependency
+            ? [
+                `${representation.dependency.package_name}@${representation.dependency.package_version}`,
+              ]
+            : [],
+        ),
+      ),
+    ];
+    const remedyDescriptions = coordinates.flatMap((coordinate) =>
+      (coordinate.remedies ?? []).flatMap((remedy) =>
+        remedy.description ? [remedy.description] : [],
+      ),
+    );
+    const reason = reasons.get(issue.id);
+    const remediation = reason
+      ? `Remediation: ${reason.reason}${reason.detail ? ` (${reason.detail})` : ''}`
+      : `Remediation: ${remedyDescriptions.length ? 'fix not verified; review evidence below' : 'fix not verified; no exact upgrade evidence supplied'}`;
+
     if (!ruleIds.has(ruleId)) {
       ruleIds.add(ruleId);
-      const problem = attrs.problems?.[0];
       const rule: SarifRule = {
         id: ruleId,
         name: attrs.title.replace(/\s+/g, '_'),
         shortDescription: { text: attrs.title },
-        helpUri: problem?.url ?? `https://security.snyk.io/vuln/${ruleId}`,
+        fullDescription: { text: attrs.description || attrs.title },
+        helpUri: advisory,
+        help: {
+          text: `${attrs.description || attrs.title}\nAdvisory: ${advisory}\n${scoreContext}\nReview the affected dependency and remediation evidence in the result.`,
+          markdown: `${attrs.description || attrs.title}\n\n[Advisory](${advisory})\n\n${scoreContext}\n\nReview the affected dependency and remediation evidence in the result.`,
+        },
         properties: {
           tags: ['security', attrs.effective_severity_level],
-          security_severity: severityToCvss(attrs.effective_severity_level),
+          'security-severity': score,
         },
       };
-      if (attrs.description) {
-        rule.fullDescription = { text: attrs.description };
-      }
       rules.push(rule);
     }
 
-    const affectedFile = attrs.coordinates?.[0]?.representations?.[0]?.resourcePath ?? '.';
-
-    results.push({
+    const affectedFile = representations
+      .map((representation) => representation.resourcePath)
+      .find((path) => {
+        if (!path?.trim()) return false;
+        const normalized = posix.normalize(path.replace(/\\/g, '/')).replace(/\/$/, '');
+        return (
+          normalized !== '.' &&
+          normalized !== '..' &&
+          !normalized.startsWith('../') &&
+          !isAbsolute(normalized)
+        );
+      });
+    const result: SarifResult = {
       ruleId,
       level: severityToLevel(attrs.effective_severity_level),
       message: {
-        text: `${attrs.title} — ${attrs.effective_severity_level} severity vulnerability found in ${repository}`,
+        text: [
+          `${attrs.title} — ${attrs.effective_severity_level} severity vulnerability found in ${repository}`,
+          dependencies.length
+            ? `Affected dependency: ${dependencies.join(', ')}`
+            : 'Affected dependency: unknown',
+          `Advisory: ${advisory}`,
+          remediation,
+          ...remedyDescriptions,
+        ].join('. '),
       },
-      locations: [
+    };
+    if (affectedFile) {
+      result.locations = [
         {
           physicalLocation: {
-            artifactLocation: { uri: affectedFile },
+            artifactLocation: {
+              uri: encodeURI(posix.normalize(affectedFile.replace(/\\/g, '/')))
+                .replace(/#/g, '%23')
+                .replace(/\?/g, '%3F'),
+            },
           },
         },
-      ],
-    });
+      ];
+    }
+    results.push(result);
   }
 
   return {
@@ -151,8 +219,9 @@ export function writeSarifReport(
   issues: SnykIssue[],
   repository: string,
   outputPath: string,
+  nonActionable: NonActionableFinding[] = [],
 ): void {
-  const sarif = buildSarifOutput(issues, repository);
+  const sarif = buildSarifOutput(issues, repository, nonActionable);
   const filePath = join(outputPath, 'snyk-remediation-report.sarif');
   writeFileSync(filePath, JSON.stringify(sarif, null, 2), 'utf-8');
   logger.info(`SARIF report written to: ${filePath}`);

@@ -19,6 +19,7 @@ export async function scanWithSnykCli(
   ecosystem: DetectedEcosystem,
   snykToken: string,
   snykOrgId?: string,
+  repositoryDirectory = '.',
 ): Promise<ReturnType<typeof normalizeCliOutput>> {
   const env = { ...process.env, SNYK_TOKEN: snykToken } as Record<string, string>;
   const args = [
@@ -76,7 +77,7 @@ export async function scanWithSnykCli(
         }
       }
     }
-    return normalizeCliOutput(raw, ecosystem);
+    return normalizeCliOutput(raw, ecosystem, repositoryDirectory);
   } catch (error) {
     const message = `Could not parse Snyk CLI output for ${ecosystem.packageManager}: ${String(error)}`;
     logger.error(message);
