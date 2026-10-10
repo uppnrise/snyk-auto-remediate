@@ -62,13 +62,19 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
   if (ecosystems.length === 0) {
     errors.push('No supported ecosystems detected; inventory is incomplete');
   }
-  const collectCliFindings = async (): Promise<CliVulnerability[]> =>
-    (
+  const collectCliFindings = async (): Promise<CliVulnerability[]> => {
+    const repositoryDirectory = await gitProjectDirectory(workingDir);
+    return (
       await Promise.all(
         ecosystems.map(async (ecosystem) => {
           try {
             await prepareForSnykScan(ecosystem);
-            return await scanWithSnykCli(ecosystem, config.snykToken, config.snykOrgId);
+            return await scanWithSnykCli(
+              ecosystem,
+              config.snykToken,
+              config.snykOrgId,
+              repositoryDirectory,
+            );
           } catch (error) {
             errors.push(`Snyk CLI scan failed for ${ecosystem.packageManager}: ${String(error)}`);
             return [];
@@ -76,6 +82,7 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
         }),
       )
     ).flat();
+  };
   let cliFindings: CliVulnerability[] = [];
   if (shouldCollectCliFindings(config)) {
     cliFindings = await collectCliFindings();
@@ -325,7 +332,7 @@ export async function runRemediation(config: RemediationConfig = loadConfig()): 
     verifiedIds,
     inventory.source === 'rest' ? config.snykProjectIds : undefined,
   );
-  writeSarifReport(reportableIssues, config.githubRepository, workingDir);
+  writeSarifReport(reportableIssues, config.githubRepository, workingDir, runtimeNonActionable);
   writeStepSummary(report);
 
   // 8. Determine exit code

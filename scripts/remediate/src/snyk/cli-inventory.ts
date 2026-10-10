@@ -60,12 +60,36 @@ export function buildCliInventory(
         effective_severity_level: severity,
         status: 'open',
         ignored: false,
+        ...(finding.description ? { description: finding.description } : {}),
+        problems: [
+          {
+            id: finding.issueKey,
+            source: 'Snyk',
+            url: `https://security.snyk.io/vuln/${finding.issueKey}`,
+            ...(finding.cvssScore !== undefined ? { cvss_score: finding.cvssScore } : {}),
+          },
+        ],
         coordinates: [
           {
             is_upgradeable: finding.isUpgradable,
+            remedies: [
+              {
+                type: 'cli_evidence',
+                description: [
+                  finding.upgradePath.length
+                    ? `Upgrade path: ${finding.upgradePath.join(' -> ')}`
+                    : 'No exact upgrade target supplied',
+                  finding.fixedIn.length ? `Fixed in: ${finding.fixedIn.join(', ')}` : '',
+                  finding.isPatchable ? 'Patch available' : '',
+                ]
+                  .filter(Boolean)
+                  .join('. '),
+              },
+            ],
             is_patchable: finding.isPatchable,
             representations: [
               {
+                ...(finding.resourcePath ? { resourcePath: finding.resourcePath } : {}),
                 dependency: {
                   package_name: finding.packageName,
                   package_version: finding.version,

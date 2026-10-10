@@ -1,3 +1,5 @@
+import { statSync } from 'fs';
+import { isAbsolute, posix, relative, resolve } from 'path';
 import type {
   CliVulnerability,
   DetectedEcosystem,
@@ -11,6 +13,8 @@ import type {
 interface RawCliVulnerability {
   id?: unknown;
   title?: unknown;
+  description?: unknown;
+  cvssScore?: unknown;
   severity?: unknown;
   packageName?: unknown;
   version?: unknown;
@@ -21,6 +25,7 @@ interface RawCliVulnerability {
   isPatchable?: unknown;
 }
 interface RawCliResult {
+  targetFile?: unknown;
   vulnerabilities?: unknown;
   packageManager?: unknown;
   projectName?: unknown;
@@ -47,11 +52,36 @@ function parseCoordinate(value: string): { name: string; version: string } | und
   return version ? { name, version } : undefined;
 }
 
-export function normalizeCliOutput(raw: unknown, ecosystem: DetectedEcosystem): CliVulnerability[] {
+function manifestPath(result: RawCliResult, ecosystem: DetectedEcosystem): string | undefined {
+  // An explicit CLI target is authoritative; otherwise use a single detected manifest.
+  const manifests = ecosystem.manifestFiles.filter((file) => !/(?:lock|sum)(?:\.|$)/i.test(file));
+  const candidate =
+    typeof result.targetFile === 'string'
+      ? result.targetFile
+      : manifests.length === 1
+        ? manifests[0]
+        : undefined;
+  if (!candidate) return undefined;
+  const absolute = resolve(ecosystem.workingDirectory, candidate);
+  const local = relative(resolve(ecosystem.workingDirectory), absolute);
+  if (!local || isAbsolute(local) || local === '..' || local.startsWith('../')) return undefined;
+  try {
+    return statSync(absolute).isFile() ? local.split('\\').join('/') : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function normalizeCliOutput(
+  raw: unknown,
+  ecosystem: DetectedEcosystem,
+  repositoryDirectory = '.',
+): CliVulnerability[] {
   const results = (Array.isArray(raw) ? raw : [raw]).filter(
     (value): value is RawCliResult => typeof value === 'object' && value !== null,
   );
   return results.flatMap((result) => {
+    const manifest = manifestPath(result, ecosystem);
     const vulnerabilities = Array.isArray(result.vulnerabilities) ? result.vulnerabilities : [];
     return vulnerabilities.flatMap((entry): CliVulnerability[] => {
       const v = entry as RawCliVulnerability;
@@ -79,6 +109,16 @@ export function normalizeCliOutput(raw: unknown, ecosystem: DetectedEcosystem): 
         isPatchable: v.isPatchable === true,
       };
       if (typeof v.title === 'string') item.title = v.title;
+      if (typeof v.description === 'string') item.description = v.description;
+      if (
+        typeof v.cvssScore === 'number' &&
+        Number.isFinite(v.cvssScore) &&
+        v.cvssScore >= 0 &&
+        v.cvssScore <= 10
+      ) {
+        item.cvssScore = v.cvssScore;
+      }
+      if (manifest) item.resourcePath = posix.join(repositoryDirectory, manifest);
       if (
         typeof v.severity === 'string' &&
         ['info', 'low', 'medium', 'high', 'critical'].includes(v.severity)
