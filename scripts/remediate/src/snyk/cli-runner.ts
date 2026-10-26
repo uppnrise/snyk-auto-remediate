@@ -15,6 +15,44 @@ const CLI_PACKAGE_MANAGER: Record<DetectedEcosystem['packageManager'], string> =
   composer: 'composer',
 };
 
+function cliErrorDetail(stdout: string): string | undefined {
+  try {
+    const output: unknown = JSON.parse(stdout);
+    if (typeof output !== 'object' || output === null || Array.isArray(output)) return;
+    const fields = output as Record<string, unknown>;
+    const messages = [fields.error, fields.userMessage, fields.message]
+      .flatMap((value) => {
+        if (typeof value === 'string') return [value];
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const nested = value as Record<string, unknown>;
+          return [nested.message, nested.userMessage].filter(
+            (item): item is string => typeof item === 'string',
+          );
+        }
+        return [];
+      })
+      .filter((message) => message.trim().length > 0);
+    return [...new Set(messages)].join('; ') || undefined;
+  } catch {
+    return;
+  }
+}
+
+function describeCliError(error: unknown, snykToken: string): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  const stdout =
+    typeof error === 'object' &&
+    error !== null &&
+    'stdout' in error &&
+    typeof error.stdout === 'string'
+      ? error.stdout
+      : '';
+  const detail = cliErrorDetail(stdout);
+  const combined = detail ? `${message}\nSnyk CLI error: ${detail}` : message;
+  const redacted = snykToken ? combined.split(snykToken).join('[REDACTED]') : combined;
+  return new Error(redacted.slice(0, 4000), { cause: error });
+}
+
 export async function scanWithSnykCli(
   ecosystem: DetectedEcosystem,
   snykToken: string,
@@ -40,7 +78,7 @@ export async function scanWithSnykCli(
       !('stdout' in error) ||
       typeof (error as { stdout?: unknown }).stdout !== 'string'
     ) {
-      throw error;
+      throw describeCliError(error, snykToken);
     }
     stdout = (error as Error & { stdout: string }).stdout;
   }
