@@ -61,6 +61,24 @@ describe('scanWithSnykCli', () => {
     await expect(scanWithSnykCli(ecosystem, 'token')).rejects.toThrow();
   });
 
+  it('reports a JSON CLI error without exposing the Snyk token', async () => {
+    vi.mocked(execCommand).mockRejectedValue(
+      Object.assign(new Error('Command failed with exit code 2: snyk test\n'), {
+        exitCode: 2,
+        stdout: JSON.stringify({
+          ok: false,
+          error: 'Could not resolve dependencies for token-secret',
+          code: 'SNYK-TEST-0001',
+        }),
+        stderr: '',
+      }),
+    );
+
+    await expect(scanWithSnykCli(ecosystem, 'token-secret')).rejects.toThrow(
+      'Could not resolve dependencies for [REDACTED]',
+    );
+  });
+
   it.each([
     '[]',
     '{}',
