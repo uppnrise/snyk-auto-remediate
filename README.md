@@ -213,8 +213,10 @@ See the [full Actions summary](docs/examples/run-summary.md),
   Snyk Code, automatic PR merging, and guessed upgrade versions are outside scope.
 - Complex Gradle expressions, indirect pip requirements, and ambiguous upgrade paths may need
   manual work. `fixedIn` alone is not treated as an exact upgrade instruction.
-- Missing `SNYK_TOKEN` or failed CLI authentication: inspect the failed step and token access.
-  Scope issue reconciliation is skipped; an empty report is not proof the repository is clean.
+- If Snyk rejects authentication, update the `SNYK_TOKEN` Actions secret with a valid
+  [Snyk CI token](https://docs.snyk.io/developer-tools/snyk-cli/authenticate-to-use-the-cli)
+  that can scan the configured organization, then rerun the workflow. If authentication fails
+  during inventory, issue reconciliation is skipped and the report contains the scan error.
 - Scoped REST `403`: local CLI fallback is attempted. Other REST errors fail the run.
 - No detected ecosystem: check `working-directory`, manifests, and `package-managers` filtering.
 - PR permission errors: check the Actions PR setting, token permissions, and target repository.

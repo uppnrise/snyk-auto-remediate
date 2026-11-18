@@ -270,7 +270,7 @@ jobs:
         with:
           snyk-version: 'stable'
 
-      - name: Validate Snyk token and CLI
+      - name: Check Snyk token is configured and print CLI version
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         run: |
@@ -318,6 +318,15 @@ jobs:
           TARGET_BRANCH: ${{ matrix.branch }}
           REMEDIATION_BRANCH_SUFFIX: ${{ inputs['report-id'] }}
         run: ${{ github.workspace }}/.snyk-auto-remediate/scripts/remediate/node_modules/.bin/tsx ${{ github.workspace }}/.snyk-auto-remediate/scripts/remediate/src/index.ts
+
+      - name: Report Snyk authentication failure
+        if: failure() && steps.remediate.outcome == 'failure'
+        env:
+          REPORT_PATH: ${{ github.workspace }}/${{ needs.prepare.outputs.target-path }}/snyk-remediation-report.json
+        run: |
+          if [ -f "$REPORT_PATH" ] && jq -e 'any(.errors[]?; contains("Use `snyk auth` to authenticate"))' "$REPORT_PATH" >/dev/null; then
+            echo "::error::Snyk rejected the workflow credentials. Update the SNYK_TOKEN Actions secret with a valid Snyk token that can scan the configured organization, then rerun the workflow."
+          fi
 
       # ── Upload SARIF to GitHub Security ────────────────────────────────────
       - name: Upload SARIF report
